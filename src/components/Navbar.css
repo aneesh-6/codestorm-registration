@@ -130,7 +130,10 @@
 /* Responsive */
 @media (max-width: 900px) {
   .hamburger { display: flex; }
-  .navbar-cta { display: none; }
+  .navbar-cta,
+  #navbar-register-btn {
+    display: none !important;
+  }
   .mobile-register-btn { display: flex; margin-top: 12px; width: 100%; justify-content: center; min-height: 48px; }
 
   .navbar-nav {
