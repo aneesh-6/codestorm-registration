@@ -1,5 +1,5 @@
 // Validation utilities for CODESTORM registration form
-// Strictly matches the Google Sheets database fields:
+// Strictly matches the required 5 fields + payment screenshot:
 // Name | Roll Number | Email | Mobile Number | Year & Branch | Payment Screenshot
 
 export const validators = {
@@ -30,13 +30,8 @@ export const validators = {
     return null;
   },
 
-  year: (value) => {
-    if (!value || value === '') return 'Please select your year.';
-    return null;
-  },
-
-  branch: (value) => {
-    if (!value || value === '') return 'Please select your branch.';
+  yearAndBranch: (value) => {
+    if (!value || value === '') return 'Please select your Year & Branch.';
     return null;
   },
 

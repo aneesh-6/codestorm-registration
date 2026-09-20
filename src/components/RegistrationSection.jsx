@@ -3,16 +3,19 @@ import { validators, validateAll } from '../utils/validation';
 import { GOOGLE_SCRIPT_URL } from '../config';
 import './RegistrationSection.css';
 
-const BRANCHES = ['CSE', 'CSE – Data Science', 'CSE – AI & ML', 'IT', 'ECE', 'EEE', 'Mechanical', 'Civil', 'Other'];
-const YEARS    = ['1st Year', '2nd Year', '3rd Year', '4th Year'];
+const YEAR_AND_BRANCH_OPTIONS = [
+  '3rd Year CSD-A',
+  '3rd Year CSD-B',
+  '2nd Year CSD-A',
+  '2nd Year CSD-B',
+];
 
 const INITIAL_FORM = {
   name: '',
   rollNumber: '',
   email: '',
   mobile: '',
-  year: '',
-  branch: '',
+  yearAndBranch: '',
   paymentScreenshot: null,
 };
 
@@ -93,16 +96,14 @@ export default function RegistrationSection({ onRegistrationSuccess }) {
         screenshotBase64 = await readFileAsBase64(form.paymentScreenshot);
       }
 
-      const yearAndBranch = `${form.year} - ${form.branch}`;
-
       const payload = {
         name: form.name.trim(),
         rollNumber: form.rollNumber.trim().toUpperCase(),
         email: form.email.trim(),
         mobile: form.mobile.trim(),
-        year: form.year,
-        branch: form.branch,
-        yearAndBranch: yearAndBranch,
+        year: form.yearAndBranch.startsWith('3rd') ? '3rd Year' : '2nd Year',
+        branch: form.yearAndBranch.includes('CSD-A') ? 'CSD-A' : 'CSD-B',
+        yearAndBranch: form.yearAndBranch,
         screenshotBase64: screenshotBase64,
         screenshotType: form.paymentScreenshot?.type || 'image/jpeg',
         screenshotName: form.paymentScreenshot?.name || 'screenshot.jpg',
@@ -134,7 +135,7 @@ export default function RegistrationSection({ onRegistrationSuccess }) {
         rollNumber: form.rollNumber.trim().toUpperCase(),
         email: form.email,
         mobile: form.mobile,
-        yearAndBranch: yearAndBranch,
+        yearAndBranch: form.yearAndBranch,
       };
 
       if (onRegistrationSuccess) {
@@ -375,46 +376,27 @@ export default function RegistrationSection({ onRegistrationSuccess }) {
                   {renderFieldError('mobile')}
                 </div>
 
-                {/* Year */}
-                <div className="form-group">
-                  <label htmlFor="year" className="form-label">
-                    Year <span className="required" aria-label="required">*</span>
+                {/* Year & Branch */}
+                <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                  <label htmlFor="yearAndBranch" className="form-label">
+                    Year & Branch <span className="required" aria-label="required">*</span>
                   </label>
                   <select
-                    id="year"
-                    name="year"
-                    value={form.year}
+                    id="yearAndBranch"
+                    name="yearAndBranch"
+                    value={form.yearAndBranch}
                     onChange={handleChange}
                     onBlur={handleBlur}
-                    className={fieldClass('year')}
+                    className={fieldClass('yearAndBranch')}
                     aria-required="true"
-                    aria-describedby="year-error"
+                    aria-describedby="yearAndBranch-error"
                   >
-                    <option value="">Select your year</option>
-                    {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+                    <option value="">Select your Year & Branch</option>
+                    {YEAR_AND_BRANCH_OPTIONS.map(opt => (
+                      <option key={opt} value={opt}>{opt}</option>
+                    ))}
                   </select>
-                  {renderFieldError('year')}
-                </div>
-
-                {/* Branch */}
-                <div className="form-group">
-                  <label htmlFor="branch" className="form-label">
-                    Branch <span className="required" aria-label="required">*</span>
-                  </label>
-                  <select
-                    id="branch"
-                    name="branch"
-                    value={form.branch}
-                    onChange={handleChange}
-                    onBlur={handleBlur}
-                    className={fieldClass('branch')}
-                    aria-required="true"
-                    aria-describedby="branch-error"
-                  >
-                    <option value="">Select your branch</option>
-                    {BRANCHES.map(b => <option key={b} value={b}>{b}</option>)}
-                  </select>
-                  {renderFieldError('branch')}
+                  {renderFieldError('yearAndBranch')}
                 </div>
               </div>
             </div>
