@@ -1,0 +1,41 @@
+/**
+ * ============================================================================
+ * CODESTORM CONFIGURATION
+ * ============================================================================
+ *
+ * Central configuration file for the CODESTORM event registration platform.
+ */
+
+export const EVENT_CONFIG = {
+  // --------------------------------------------------------------------------
+  // WHATSAPP GROUP LINK CONFIGURATION
+  // --------------------------------------------------------------------------
+  // Official CODESTORM WhatsApp group invitation link:
+  whatsappGroupLink: "https://chat.whatsapp.com/FYVIZ11zmBB50cX8yk0KIj",
+
+  eventName: "CODESTORM 2026",
+  eventFee: "₹50",
+  department: "Department of CSE – Data Science",
+  college: "Malla Reddy Engineering College and Management Sciences",
+};
+
+// Single, easily editable export for the WhatsApp group link
+export const WHATSAPP_GROUP_LINK = EVENT_CONFIG.whatsappGroupLink;
+
+/**
+ * Google Apps Script Web App Endpoint for Google Sheets Database
+ */
+export const GOOGLE_SCRIPT_URL =
+  import.meta.env.VITE_GOOGLE_SCRIPT_URL ||
+  "https://script.google.com/macros/s/AKfycbzimvHGfplmvIIrU9D7AZJHKXXYARvhP4H5IRRXmavv339DtXs2OnjQhXJcBh1Ub8By/exec";
+
+/**
+ * Returns true if the Google Apps Script Web App URL is properly configured.
+ */
+export const isGoogleScriptConfigured = () => {
+  return (
+    Boolean(GOOGLE_SCRIPT_URL) &&
+    GOOGLE_SCRIPT_URL.startsWith("https://script.google.com/macros/s/") &&
+    !GOOGLE_SCRIPT_URL.includes("YOUR_")
+  );
+};

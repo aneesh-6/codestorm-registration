@@ -1,0 +1,67 @@
+/* ---- About Section ---- */
+.about-section {
+  background: var(--bg);
+}
+.about-header {
+  margin-bottom: 32px;
+}
+.about-text-wrap {
+  max-width: 720px;
+  margin: 0 auto;
+  text-align: center;
+  padding: 32px;
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+}
+.about-text {
+  font-size: 1.0625rem;
+  color: var(--text-muted);
+  line-height: 1.8;
+}
+.about-text strong { color: var(--primary); }
+
+/* Highlight Cards */
+.about-highlights {
+  margin-top: 48px;
+}
+.about-card {
+  padding: 32px 28px;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  transition: var(--transition);
+  text-align: center;
+}
+.about-card:hover {
+  transform: translateY(-6px);
+  box-shadow: var(--shadow-lg);
+}
+.about-card-blue:hover { border-color: rgba(26,45,90,0.2); }
+.about-card-orange:hover { border-color: rgba(249,115,22,0.2); }
+.about-card-teal:hover { border-color: rgba(13,148,136,0.2); }
+
+.about-card-icon {
+  width: 56px; height: 56px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 20px;
+}
+.about-icon-blue  { background: rgba(26,45,90,0.08);   color: var(--primary); }
+.about-icon-orange{ background: rgba(249,115,22,0.1);  color: var(--secondary); }
+.about-icon-teal  { background: rgba(13,148,136,0.1);  color: var(--teal); }
+
+.about-card-title {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--primary);
+  margin-bottom: 10px;
+  letter-spacing: -0.01em;
+}
+.about-card-desc {
+  font-size: 0.9375rem;
+  color: var(--text-muted);
+  line-height: 1.6;
+}

@@ -1,0 +1,126 @@
+/* ---- Footer ---- */
+.site-footer {
+  background: var(--primary-dark);
+  color: rgba(255,255,255,0.8);
+}
+.footer-inner {
+  display: grid;
+  grid-template-columns: 1.5fr 1.5fr 1fr 1.2fr;
+  gap: 48px;
+  padding-top: 64px;
+  padding-bottom: 48px;
+}
+
+/* Brand */
+.footer-brand {}
+.footer-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.footer-logo-text {
+  font-size: 1.25rem;
+  font-weight: 900;
+  color: white;
+  letter-spacing: 0.06em;
+}
+.footer-event-subtitle {
+  font-size: 0.875rem;
+  color: rgba(255,255,255,0.6);
+  margin-bottom: 12px;
+}
+.footer-tagline {
+  font-size: 0.8125rem;
+  font-style: italic;
+  color: var(--secondary-light);
+  font-weight: 500;
+}
+
+/* College */
+.footer-college {}
+.footer-college-name {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: white;
+  line-height: 1.4;
+}
+.footer-dept {
+  font-size: 0.8125rem;
+  color: var(--teal-light);
+  font-weight: 600;
+  margin: 8px 0 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.footer-address {
+  font-size: 0.8125rem;
+  color: rgba(255,255,255,0.5);
+  line-height: 1.7;
+}
+
+/* Nav */
+.footer-nav {}
+.footer-nav-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: rgba(255,255,255,0.5);
+  margin-bottom: 16px;
+}
+.footer-nav-list { display: flex; flex-direction: column; gap: 8px; }
+.footer-nav-link {
+  font-size: 0.875rem;
+  color: rgba(255,255,255,0.65);
+  text-decoration: none;
+  transition: var(--transition);
+}
+.footer-nav-link:hover { color: white; }
+
+/* CTA */
+.footer-cta-col { display: flex; flex-direction: column; gap: 20px; }
+.footer-tagline-keywords {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: rgba(255,255,255,0.5);
+}
+.footer-register-btn {
+  padding: 12px 24px;
+  font-size: 0.875rem;
+  width: fit-content;
+}
+
+/* Bottom */
+.footer-bottom {
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+.footer-bottom-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 20px;
+  padding-bottom: 20px;
+}
+.footer-copyright {
+  font-size: 0.8125rem;
+  color: rgba(255,255,255,0.4);
+}
+.footer-autonomy {
+  font-size: 0.75rem;
+  color: rgba(255,255,255,0.35);
+  font-style: italic;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .footer-inner { grid-template-columns: repeat(2, 1fr); gap: 32px; }
+}
+@media (max-width: 600px) {
+  .footer-inner { grid-template-columns: 1fr; gap: 28px; padding-top: 40px; padding-bottom: 32px; }
+  .footer-bottom-inner { flex-direction: column; gap: 8px; text-align: center; }
+}

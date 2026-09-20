@@ -1,0 +1,73 @@
+/* ---- Highlights Section ---- */
+.highlights-section {
+  background: var(--bg);
+}
+.highlights-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+}
+.highlight-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 28px 24px;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  transition: var(--transition);
+  position: relative;
+  overflow: hidden;
+}
+.highlight-card::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 3px;
+  opacity: 0;
+  transition: var(--transition);
+}
+.highlight-blue::after  { background: linear-gradient(90deg, var(--primary), #3b5bdb); }
+.highlight-orange::after{ background: linear-gradient(90deg, var(--secondary), #fbbf24); }
+.highlight-teal::after  { background: linear-gradient(90deg, var(--teal), #06b6d4); }
+.highlight-purple::after{ background: linear-gradient(90deg, var(--purple), var(--purple-light)); }
+
+.highlight-card:hover {
+  transform: translateY(-5px);
+  box-shadow: var(--shadow-lg);
+  border-color: transparent;
+}
+.highlight-card:hover::after { opacity: 1; }
+
+.highlight-icon {
+  width: 52px; height: 52px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.highlight-icon-blue  { background: rgba(26,45,90,0.08);  color: var(--primary); }
+.highlight-icon-orange{ background: rgba(249,115,22,0.1); color: var(--secondary); }
+.highlight-icon-teal  { background: rgba(13,148,136,0.1); color: var(--teal); }
+.highlight-icon-purple{ background: rgba(124,58,237,0.08); color: var(--purple); }
+
+.highlight-title {
+  font-size: 1.0625rem;
+  font-weight: 700;
+  color: var(--primary);
+  letter-spacing: -0.01em;
+}
+.highlight-desc {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  line-height: 1.65;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .highlights-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 480px) {
+  .highlights-grid { grid-template-columns: 1fr; }
+}

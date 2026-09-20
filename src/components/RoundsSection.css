@@ -1,0 +1,130 @@
+/* ---- Rounds Section ---- */
+.rounds-section {
+  background: var(--bg-soft);
+  position: relative;
+  overflow: hidden;
+}
+.rounds-section::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--primary) 0%, var(--secondary) 50%, var(--teal) 100%);
+}
+
+.rounds-header { margin-bottom: 0; }
+
+.rounds-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+}
+
+/* Card Base */
+.round-card {
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  overflow: hidden;
+  transition: var(--transition);
+  position: relative;
+}
+.round-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  transition: var(--transition);
+}
+.round-card-blue::before { background: linear-gradient(90deg, #1a2d5a, #3b5bdb); }
+.round-card-orange::before { background: linear-gradient(90deg, #f97316, #fbbf24); }
+.round-card-teal::before { background: linear-gradient(90deg, #0d9488, #06b6d4); }
+
+.round-card:hover {
+  transform: translateY(-8px);
+  box-shadow: var(--shadow-xl);
+  border-color: transparent;
+}
+
+.round-card-inner {
+  padding: 32px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Round Number Badge */
+.round-number-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  font-size: 0.6875rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  width: fit-content;
+  background: var(--bg-subtle);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+.round-card-blue .round-number-badge  { background: rgba(26,45,90,0.06);  color: var(--primary); border-color: rgba(26,45,90,0.12); }
+.round-card-orange .round-number-badge{ background: rgba(249,115,22,0.08); color: var(--secondary-dark); border-color: rgba(249,115,22,0.15); }
+.round-card-teal .round-number-badge  { background: rgba(13,148,136,0.08); color: var(--teal); border-color: rgba(13,148,136,0.15); }
+
+/* Icon */
+.round-icon-wrap {
+  width: 60px; height: 60px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.round-icon-blue  { background: rgba(26,45,90,0.08);  color: var(--primary); }
+.round-icon-orange{ background: rgba(249,115,22,0.1); color: var(--secondary); }
+.round-icon-teal  { background: rgba(13,148,136,0.1); color: var(--teal); }
+
+.round-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--primary);
+  letter-spacing: -0.01em;
+}
+.round-desc {
+  font-size: 0.9375rem;
+  color: var(--text-muted);
+  line-height: 1.65;
+  flex: 1;
+}
+
+/* Keywords */
+.round-keywords {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+.round-keyword {
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+.round-kw-blue  { background: rgba(26,45,90,0.08);  color: var(--primary); }
+.round-kw-orange{ background: rgba(249,115,22,0.1); color: var(--secondary-dark); }
+.round-kw-teal  { background: rgba(13,148,136,0.1); color: var(--teal); }
+
+/* Responsive */
+@media (max-width: 900px) {
+  .rounds-grid { grid-template-columns: 1fr; }
+}
+@media (min-width: 601px) and (max-width: 900px) {
+  .rounds-grid { grid-template-columns: repeat(2, 1fr); }
+  .rounds-grid .round-card:last-child {
+    grid-column: span 2;
+    max-width: 400px;
+    margin: 0 auto;
+    width: 100%;
+  }
+}

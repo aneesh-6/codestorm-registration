@@ -1,0 +1,132 @@
+/* ---- Coordinators Section ---- */
+.coordinators-section {
+  background: var(--bg);
+}
+
+.coord-group {
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  padding: 28px;
+}
+.coord-group-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.coord-group-icon {
+  width: 36px; height: 36px;
+  border-radius: var(--radius-sm);
+  background: rgba(26,45,90,0.08);
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.faculty-icon {
+  background: rgba(13,148,136,0.08);
+  color: var(--teal);
+}
+.coord-group-title {
+  font-size: 1.0625rem;
+  font-weight: 700;
+  color: var(--primary);
+  letter-spacing: -0.01em;
+}
+
+/* Grid */
+.coord-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+.coord-grid-2 {
+  grid-template-columns: repeat(2, 1fr);
+  max-width: 600px;
+}
+.coord-grid-3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+/* Card */
+.coord-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  transition: var(--transition);
+}
+.coord-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-md);
+}
+
+/* Avatar */
+.coord-avatar {
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.875rem;
+  font-weight: 800;
+  flex-shrink: 0;
+  letter-spacing: 0.02em;
+}
+.coord-avatar-blue   { background: rgba(26,45,90,0.1);  color: var(--primary); }
+.coord-avatar-orange { background: rgba(249,115,22,0.12); color: var(--secondary-dark); }
+.coord-avatar-teal   { background: rgba(13,148,136,0.1); color: var(--teal); }
+.coord-avatar-purple { background: rgba(124,58,237,0.1); color: var(--purple); }
+
+.coord-info { flex: 1; min-width: 0; }
+.coord-name {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.coord-role {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--teal);
+  margin-top: 1px;
+}
+.coord-phone {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--primary);
+  margin-top: 4px;
+  transition: var(--transition);
+  text-decoration: none;
+}
+.coord-phone:hover { color: var(--secondary); }
+.coord-phone-na {
+  font-size: 0.75rem;
+  color: var(--text-light);
+  font-style: italic;
+  margin-top: 4px;
+  display: block;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+  .coord-grid { grid-template-columns: repeat(2, 1fr); }
+  .coord-grid-3 { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 600px) {
+  .coord-grid, .coord-grid-2, .coord-grid-3 { grid-template-columns: 1fr; }
+}

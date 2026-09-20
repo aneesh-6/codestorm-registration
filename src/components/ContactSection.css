@@ -1,0 +1,130 @@
+/* ---- Contact Section ---- */
+.contact-section {
+  background: var(--bg-soft);
+}
+.contact-card {
+  max-width: 900px;
+  margin: 0 auto;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  box-shadow: var(--shadow-md);
+}
+.contact-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+  padding: 36px 36px 28px;
+  background: linear-gradient(135deg, rgba(26,45,90,0.03) 0%, rgba(249,115,22,0.02) 100%);
+  border-bottom: 1px solid var(--border);
+}
+.contact-header-icon {
+  width: 56px; height: 56px;
+  border-radius: var(--radius-md);
+  background: rgba(26,45,90,0.08);
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 4px;
+}
+.contact-subtitle {
+  font-size: 0.9375rem;
+  color: var(--text-muted);
+  margin-top: 6px;
+}
+
+/* Persons */
+.contact-persons {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0;
+  border-bottom: 1px solid var(--border);
+}
+.contact-person-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 24px;
+  border-right: 1px solid var(--border);
+  transition: var(--transition);
+}
+.contact-person-card:last-child { border-right: none; }
+.contact-person-card:hover {
+  background: var(--bg-soft);
+}
+
+.contact-avatar {
+  width: 48px; height: 48px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.0625rem;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+.contact-avatar-blue   { background: rgba(26,45,90,0.1);  color: var(--primary); }
+.contact-avatar-orange { background: rgba(249,115,22,0.12); color: var(--secondary-dark); }
+.contact-avatar-teal   { background: rgba(13,148,136,0.1); color: var(--teal); }
+
+.contact-person-name {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text);
+}
+.contact-person-role {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-top: 2px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.contact-phone-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 10px;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--primary);
+  text-decoration: none;
+  transition: var(--transition);
+}
+.contact-phone-link:hover { color: var(--secondary); }
+.contact-email-placeholder {
+  margin-top: 10px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  font-style: italic;
+  padding: 5px 10px;
+  background: var(--bg-soft);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  display: inline-block;
+}
+
+/* College Info */
+.contact-college-info {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 20px 36px;
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+.contact-college-info svg { color: var(--primary); flex-shrink: 0; margin-top: 2px; }
+
+/* Responsive */
+@media (max-width: 768px) {
+  .contact-header { flex-direction: column; padding: 24px; gap: 12px; }
+  .contact-persons { grid-template-columns: 1fr; }
+  .contact-person-card { border-right: none; border-bottom: 1px solid var(--border); }
+  .contact-person-card:last-child { border-bottom: none; }
+  .contact-college-info { padding: 16px 24px; }
+}
