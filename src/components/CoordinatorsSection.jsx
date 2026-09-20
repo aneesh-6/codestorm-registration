@@ -13,7 +13,7 @@ const studentCoords = [
 const facultyCoords = [
   { name: 'Dr. Zaheer Sultana',                      phone: null, initial: 'ZS', color: 'orange', role: 'Faculty Coordinator' },
   { name: 'Assistant Professor Jagat Jeeta Mohanty', phone: null, initial: 'JM', color: 'blue',   role: 'Faculty Coordinator' },
-  { name: 'Miss Supriya',                            phone: null, initial: 'MS', color: 'teal',   role: 'Faculty Coordinator' },
+  { name: 'Miss Supriya Kumari',                     phone: null, initial: 'SK', color: 'teal',   role: 'Faculty Coordinator' },
 ];
 
 function CoordCard({ name, phone, initial, color, role }) {
