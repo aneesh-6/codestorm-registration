@@ -122,9 +122,20 @@
 
 /* Responsive */
 @media (max-width: 768px) {
-  .contact-header { flex-direction: column; padding: 24px; gap: 12px; }
+  .contact-header { flex-direction: column; padding: 24px 20px; gap: 12px; }
   .contact-persons { grid-template-columns: 1fr; }
-  .contact-person-card { border-right: none; border-bottom: 1px solid var(--border); }
+  .contact-person-card { border-right: none; border-bottom: 1px solid var(--border); padding: 20px; }
   .contact-person-card:last-child { border-bottom: none; }
-  .contact-college-info { padding: 16px 24px; }
+  .contact-college-info { padding: 16px 20px; }
+}
+
+@media (max-width: 480px) {
+  .contact-header { padding: 18px 14px; gap: 10px; }
+  .contact-header-icon { width: 44px; height: 44px; }
+  .contact-header-icon svg { width: 22px; height: 22px; }
+  .contact-subtitle { font-size: 0.8125rem; }
+  .contact-person-card { padding: 16px 14px; gap: 12px; }
+  .contact-avatar { width: 40px; height: 40px; font-size: 0.9rem; }
+  .contact-phone-link { font-size: 0.875rem; min-height: 36px; }
+  .contact-college-info { padding: 14px 14px; font-size: 0.78rem; line-height: 1.5; }
 }

@@ -121,6 +121,28 @@
   .footer-inner { grid-template-columns: repeat(2, 1fr); gap: 32px; }
 }
 @media (max-width: 600px) {
-  .footer-inner { grid-template-columns: 1fr; gap: 28px; padding-top: 40px; padding-bottom: 32px; }
-  .footer-bottom-inner { flex-direction: column; gap: 8px; text-align: center; }
+  .footer-inner {
+    grid-template-columns: 1fr;
+    gap: 24px;
+    padding-top: 36px;
+    padding-bottom: 28px;
+  }
+  .footer-nav-link {
+    padding: 6px 0;
+    min-height: 36px;
+    display: inline-flex;
+    align-items: center;
+  }
+  .footer-register-btn {
+    width: 100%;
+    justify-content: center;
+    min-height: 48px;
+  }
+  .footer-bottom-inner {
+    flex-direction: column;
+    gap: 8px;
+    text-align: center;
+    padding-top: 16px;
+    padding-bottom: 16px;
+  }
 }

@@ -131,24 +131,28 @@
 @media (max-width: 900px) {
   .hamburger { display: flex; }
   .navbar-cta { display: none; }
-  .mobile-register-btn { display: flex; margin-top: 8px; width: 100%; justify-content: center; }
+  .mobile-register-btn { display: flex; margin-top: 12px; width: 100%; justify-content: center; min-height: 48px; }
 
   .navbar-nav {
     position: fixed;
     top: var(--navbar-h);
     left: 0; right: 0;
-    background: #fff;
+    background: rgba(255, 255, 255, 0.98);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
     flex-direction: column;
     align-items: stretch;
-    padding: 16px;
+    padding: 16px 20px 24px;
     gap: 4px;
     border-bottom: 1px solid var(--border);
-    box-shadow: var(--shadow-lg);
-    transform: translateY(-110%);
-    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
+    box-shadow: var(--shadow-xl);
+    transform: translateY(-115%);
+    transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease;
     opacity: 0;
     pointer-events: none;
     margin-left: 0;
+    max-height: calc(100vh - var(--navbar-h));
+    overflow-y: auto;
   }
   .navbar-nav.open {
     transform: translateY(0);
@@ -158,10 +162,31 @@
   .nav-list {
     flex-direction: column;
     align-items: stretch;
-    gap: 2px;
+    gap: 4px;
   }
   .nav-link {
     padding: 12px 16px;
     font-size: 1rem;
+    font-weight: 600;
+    border-radius: var(--radius-md);
+    min-height: 46px;
+    display: flex;
+    align-items: center;
   }
+  .nav-link:active {
+    background: var(--bg-subtle);
+  }
+}
+
+@media (max-width: 480px) {
+  .navbar-inner { gap: 8px; }
+  .brand-logo svg { width: 30px; height: 30px; }
+  .brand-name { font-size: 0.95rem; }
+  .brand-college { font-size: 0.58rem; }
+  .hamburger { width: 36px; height: 36px; padding: 6px; }
+}
+
+@media (max-width: 340px) {
+  .brand-name { font-size: 0.875rem; }
+  .brand-college { display: none; }
 }

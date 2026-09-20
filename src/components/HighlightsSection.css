@@ -66,8 +66,28 @@
 
 /* Responsive */
 @media (max-width: 1024px) {
-  .highlights-grid { grid-template-columns: repeat(2, 1fr); }
+  .highlights-grid { grid-template-columns: repeat(2, 1fr); gap: 16px; }
 }
-@media (max-width: 480px) {
-  .highlights-grid { grid-template-columns: 1fr; }
+@media (max-width: 600px) {
+  .highlights-grid { grid-template-columns: 1fr; gap: 12px; }
+  .highlight-card {
+    padding: 18px 16px;
+    border-radius: var(--radius-lg);
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 14px;
+  }
+  .highlight-icon {
+    width: 44px;
+    height: 44px;
+    flex-shrink: 0;
+  }
+  .highlight-title {
+    font-size: 0.95rem;
+    margin-bottom: 4px;
+  }
+  .highlight-desc {
+    font-size: 0.8125rem;
+    line-height: 1.5;
+  }
 }

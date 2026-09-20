@@ -496,30 +496,128 @@
 
 /* Responsive */
 @media (max-width: 650px) {
-  .success-card-main {
-    padding: 28px 18px;
+  .success-main-container {
+    padding: 24px 12px 64px;
   }
-  .whatsapp-section-card {
-    padding: 24px 18px;
+  .success-navbar {
+    padding: 12px 0;
+  }
+  .success-brand-title {
+    font-size: 0.95rem;
+  }
+  .success-brand-dept {
+    font-size: 0.625rem;
+  }
+  .success-nav-back {
+    padding: 6px 10px;
+    font-size: 0.75rem;
+  }
+  .success-card-main {
+    padding: 28px 16px;
+    border-radius: var(--radius-lg);
+  }
+  .success-hero-header {
+    margin-bottom: 24px;
   }
   .success-title-text {
-    font-size: 1.5rem;
+    font-size: clamp(1.35rem, 5.5vw, 1.65rem);
+    letter-spacing: -0.01em;
+  }
+  .success-subtitle-text {
+    font-size: 0.9375rem;
+  }
+  .success-id-hero-card {
+    padding: 20px 14px;
+    border-radius: var(--radius-md);
+  }
+  .success-id-row {
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
   }
   .success-id-code {
-    font-size: 1.5rem;
+    font-size: clamp(1.25rem, 6vw, 1.85rem);
+    word-break: break-all;
+  }
+  .success-ack-box {
+    padding: 12px 14px;
+    gap: 10px;
+    margin-bottom: 24px;
+  }
+  .success-ack-title {
+    font-size: 0.875rem;
+  }
+  .success-ack-desc {
+    font-size: 0.75rem;
+  }
+  .whatsapp-section-card {
+    padding: 24px 16px;
+    border-radius: var(--radius-lg);
+    margin-bottom: 24px;
+  }
+  .whatsapp-title {
+    font-size: 1.15rem;
+  }
+  .whatsapp-desc {
+    font-size: 0.875rem;
+    margin-bottom: 18px;
+  }
+  .btn-whatsapp-large {
+    width: 100%;
+    justify-content: center;
+    font-size: clamp(0.875rem, 3.8vw, 1.0625rem);
+    padding: 14px 16px;
+    gap: 8px;
+  }
+  .whatsapp-warning-note {
+    padding: 12px 14px;
+    margin-top: 18px;
+  }
+  .reg-summary-section {
+    padding: 18px 14px;
+    margin-bottom: 20px;
+    border-radius: var(--radius-md);
   }
   .reg-summary-grid {
     grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .success-coordinators-card {
+    padding: 16px 14px;
+    margin-bottom: 24px;
+    border-radius: var(--radius-md);
   }
   .success-coords-grid {
     grid-template-columns: 1fr;
+    gap: 16px;
   }
   .success-actions-row {
     flex-direction: column;
     align-items: stretch;
+    gap: 10px;
   }
-  .success-actions-row .btn {
+  .success-actions-row .btn,
+  .btn-whatsapp-secondary {
     width: 100%;
     justify-content: center;
+    min-height: 48px;
+    padding: 12px 16px;
+    font-size: 0.875rem;
+  }
+}
+
+@media (max-width: 360px) {
+  .success-card-main {
+    padding: 20px 12px;
+  }
+  .whatsapp-section-card {
+    padding: 18px 12px;
+  }
+  .success-id-code {
+    font-size: 1.15rem;
+  }
+  .btn-whatsapp-large {
+    font-size: 0.8125rem;
+    padding: 12px 10px;
   }
 }

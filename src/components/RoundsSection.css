@@ -117,14 +117,16 @@
 
 /* Responsive */
 @media (max-width: 900px) {
-  .rounds-grid { grid-template-columns: 1fr; }
+  .rounds-grid { grid-template-columns: 1fr; gap: 18px; }
+  .round-card-inner { padding: 24px 20px; gap: 14px; }
 }
-@media (min-width: 601px) and (max-width: 900px) {
-  .rounds-grid { grid-template-columns: repeat(2, 1fr); }
-  .rounds-grid .round-card:last-child {
-    grid-column: span 2;
-    max-width: 400px;
-    margin: 0 auto;
-    width: 100%;
-  }
+
+@media (max-width: 480px) {
+  .rounds-grid { gap: 14px; }
+  .round-card { border-radius: var(--radius-lg); }
+  .round-card-inner { padding: 20px 16px; gap: 12px; }
+  .round-icon-wrap { width: 48px; height: 48px; }
+  .round-title { font-size: 1.0625rem; }
+  .round-desc { font-size: 0.875rem; line-height: 1.5; }
+  .round-keyword { font-size: 0.625rem; padding: 3px 8px; }
 }
