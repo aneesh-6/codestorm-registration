@@ -250,7 +250,7 @@ export default function RegistrationSuccessPage({ registrationData, onBack }) {
                 <strong className="coord-col-title">Faculty Coordinators</strong>
                 <ul className="coord-mini-list">
                   <li>Dr. Zaheer Sultana</li>
-                  <li>Assistant Professor Jagat Jeeta Mohanty</li>
+                  <li>Asst. Prof. Jagat Jeeta Mohanty</li>
                   <li>Miss Supriya Kumari</li>
                 </ul>
               </div>

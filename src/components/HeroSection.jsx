@@ -112,6 +112,10 @@ export default function HeroSection() {
               <span className="hero-stat-value">CS-2026</span>
               <span className="hero-stat-label">Registration ID</span>
             </div>
+            <div className="hero-stat-pill" title="Open to students from all years and all branches">
+              <span className="hero-stat-value" style={{ fontSize: '0.85rem', letterSpacing: '0.02em' }}>All Years</span>
+              <span className="hero-stat-label">🎓 All Branches</span>
+            </div>
           </div>
         </div>
 

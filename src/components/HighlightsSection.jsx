@@ -32,8 +32,8 @@ const highlights = [
         <path d="M16 3.13a4 4 0 010 7.75"/>
       </svg>
     ),
-    title: 'Open to Students',
-    desc: 'Encourage participation from students across all branches and years.',
+    title: '🎓 Open to All Students',
+    desc: 'Open to students from all years and all branches — every student of the college is welcome to participate.',
     color: 'teal',
   },
   {

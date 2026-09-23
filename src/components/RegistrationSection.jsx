@@ -4,10 +4,46 @@ import { GOOGLE_SCRIPT_URL } from '../config';
 import './RegistrationSection.css';
 
 const YEAR_AND_BRANCH_OPTIONS = [
-  '3rd Year CSD-A',
-  '3rd Year CSD-B',
-  '2nd Year CSD-A',
-  '2nd Year CSD-B',
+  // 1st Year
+  '1st Year – CSE',
+  '1st Year – CSE (Data Science)',
+  '1st Year – CSE (AI & ML)',
+  '1st Year – ECE',
+  '1st Year – EEE',
+  '1st Year – Mechanical',
+  '1st Year – Civil',
+  '1st Year – IT',
+  '1st Year – Other',
+  // 2nd Year
+  '2nd Year – CSE',
+  '2nd Year – CSE (Data Science)',
+  '2nd Year – CSE (AI & ML)',
+  '2nd Year – ECE',
+  '2nd Year – EEE',
+  '2nd Year – Mechanical',
+  '2nd Year – Civil',
+  '2nd Year – IT',
+  '2nd Year – Other',
+  // 3rd Year
+  '3rd Year – CSE',
+  '3rd Year – CSE (Data Science)',
+  '3rd Year – CSE (AI & ML)',
+  '3rd Year – ECE',
+  '3rd Year – EEE',
+  '3rd Year – Mechanical',
+  '3rd Year – Civil',
+  '3rd Year – IT',
+  '3rd Year – Other',
+  // 4th Year
+  '4th Year – CSE',
+  '4th Year – CSE (Data Science)',
+  '4th Year – CSE (AI & ML)',
+  '4th Year – ECE',
+  '4th Year – EEE',
+  '4th Year – Mechanical',
+  '4th Year – Civil',
+  '4th Year – IT',
+  '4th Year – Other',
 ];
 
 const INITIAL_FORM = {
@@ -96,13 +132,20 @@ export default function RegistrationSection({ onRegistrationSuccess }) {
         screenshotBase64 = await readFileAsBase64(form.paymentScreenshot);
       }
 
+      // Derive year and branch from the selected option (e.g. "2nd Year – CSE (Data Science)")
+      const selectedOption = form.yearAndBranch;
+      const yearMatch = selectedOption.match(/^(\d(?:st|nd|rd|th) Year)/);
+      const branchMatch = selectedOption.match(/–\s*(.+)$/);
+      const derivedYear = yearMatch ? yearMatch[1] : selectedOption;
+      const derivedBranch = branchMatch ? branchMatch[1].trim() : selectedOption;
+
       const payload = {
         name: form.name.trim(),
         rollNumber: form.rollNumber.trim().toUpperCase(),
         email: form.email.trim(),
         mobile: form.mobile.trim(),
-        year: form.yearAndBranch.startsWith('3rd') ? '3rd Year' : '2nd Year',
-        branch: form.yearAndBranch.includes('CSD-A') ? 'CSD-A' : 'CSD-B',
+        year: derivedYear,
+        branch: derivedBranch,
         yearAndBranch: form.yearAndBranch,
         screenshotBase64: screenshotBase64,
         screenshotType: form.paymentScreenshot?.type || 'image/jpeg',
@@ -184,6 +227,10 @@ export default function RegistrationSection({ onRegistrationSuccess }) {
           <p className="section-desc" style={{ margin: '12px auto 0', textAlign: 'center' }}>
             Complete the form below after making the ₹50 payment. Every registration is directly stored in the master database.
           </p>
+          <div className="eligibility-badge" role="note" aria-label="Eligibility information" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', margin: '16px auto 0', padding: '8px 18px', borderRadius: '50px', background: 'rgba(99,179,237,0.10)', border: '1px solid rgba(99,179,237,0.30)', fontSize: '0.92rem', color: 'var(--color-accent, #63b3ed)', fontWeight: 600 }}>
+            <span aria-hidden="true">🎓</span>
+            Eligibility: Open to Students from All Years &amp; All Branches
+          </div>
         </div>
 
         <div className="reg-layout mt-48">
@@ -376,10 +423,10 @@ export default function RegistrationSection({ onRegistrationSuccess }) {
                   {renderFieldError('mobile')}
                 </div>
 
-                {/* Year & Branch */}
+                {/* Year & Branch – open to all years & all branches */}
                 <div className="form-group" style={{ gridColumn: '1 / -1' }}>
                   <label htmlFor="yearAndBranch" className="form-label">
-                    Year & Branch <span className="required" aria-label="required">*</span>
+                    Year &amp; Branch <span className="required" aria-label="required">*</span>
                   </label>
                   <select
                     id="yearAndBranch"
@@ -391,10 +438,27 @@ export default function RegistrationSection({ onRegistrationSuccess }) {
                     aria-required="true"
                     aria-describedby="yearAndBranch-error"
                   >
-                    <option value="">Select your Year & Branch</option>
-                    {YEAR_AND_BRANCH_OPTIONS.map(opt => (
-                      <option key={opt} value={opt}>{opt}</option>
-                    ))}
+                    <option value="">Select your Year &amp; Branch (All years &amp; branches welcome)</option>
+                    <optgroup label="1st Year">
+                      {YEAR_AND_BRANCH_OPTIONS.filter(o => o.startsWith('1st')).map(opt => (
+                        <option key={opt} value={opt}>{opt}</option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="2nd Year">
+                      {YEAR_AND_BRANCH_OPTIONS.filter(o => o.startsWith('2nd')).map(opt => (
+                        <option key={opt} value={opt}>{opt}</option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="3rd Year">
+                      {YEAR_AND_BRANCH_OPTIONS.filter(o => o.startsWith('3rd')).map(opt => (
+                        <option key={opt} value={opt}>{opt}</option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="4th Year">
+                      {YEAR_AND_BRANCH_OPTIONS.filter(o => o.startsWith('4th')).map(opt => (
+                        <option key={opt} value={opt}>{opt}</option>
+                      ))}
+                    </optgroup>
                   </select>
                   {renderFieldError('yearAndBranch')}
                 </div>

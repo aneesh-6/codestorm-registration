@@ -12,7 +12,7 @@ const studentCoords = [
 // Faculty Coordinators (Updated per official specification)
 const facultyCoords = [
   { name: 'Dr. Zaheer Sultana',                      phone: null, initial: 'ZS', color: 'orange', role: 'Faculty Coordinator' },
-  { name: 'Assistant Professor Jagat Jeeta Mohanty', phone: null, initial: 'JM', color: 'blue',   role: 'Faculty Coordinator' },
+  { name: 'Asst. Prof. Jagat Jeeta Mohanty',        phone: null, initial: 'JM', color: 'blue',   role: 'Faculty Coordinator' },
   { name: 'Miss Supriya Kumari',                     phone: null, initial: 'SK', color: 'teal',   role: 'Faculty Coordinator' },
 ];
 

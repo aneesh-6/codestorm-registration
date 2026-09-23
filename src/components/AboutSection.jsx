@@ -77,6 +77,11 @@ export default function AboutSection() {
               Engineering College and Management Sciences, this event provides a platform for students
               to showcase their technical expertise and grow through healthy competition.
             </p>
+            <p className="about-text mt-16" style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <span aria-hidden="true" style={{ fontSize: '1.1em' }}>🎓</span>
+              <strong>Eligibility:</strong> Students from all years and all branches are welcome to participate.
+              This event is open to <em>every student</em> of the college, regardless of year, branch, or department.
+            </p>
           </div>
         </div>
 
