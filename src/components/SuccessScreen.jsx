@@ -71,6 +71,68 @@ THINK • DEBUG • PREDICT • CODE
             <div className="success-reg-id-value">{registrationId}</div>
           </div>
 
+          {/* Official Event Conducting Platform Credentials Box */}
+          <div style={{
+            background: 'linear-gradient(135deg, #1a2d5a 0%, #0f1c3d 100%)',
+            color: '#ffffff',
+            borderRadius: '16px',
+            padding: '1.75rem',
+            margin: '1.5rem 0',
+            textAlign: 'left',
+            border: '2px solid #f97316',
+            boxShadow: '0 8px 24px rgba(249, 115, 22, 0.2)'
+          }}>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', background: 'rgba(249, 115, 22, 0.25)', color: '#fb923c', padding: '0.2rem 0.75rem', borderRadius: '9999px', fontSize: '0.78rem', fontWeight: 800, marginBottom: '0.75rem' }}>
+              EVENT CONDUCTING PLATFORM CREDENTIALS
+            </div>
+            <h3 style={{ fontSize: '1.35rem', fontWeight: 900, color: '#ffffff', margin: '0 0 0.5rem' }}>
+              Your Account Has Been Created 🎉
+            </h3>
+            <p style={{ fontSize: '0.88rem', color: 'rgba(255,255,255,0.8)', margin: '0 0 1.25rem' }}>
+              Welcome to CodeStorm 2026. Login using these credentials during the event.
+            </p>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', background: 'rgba(255,255,255,0.08)', padding: '1rem 1.25rem', borderRadius: '10px', marginBottom: '1.25rem' }}>
+              <div>
+                <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.6)', fontWeight: 700, textTransform: 'uppercase' }}>Participant ID</div>
+                <div style={{ fontSize: '1.35rem', fontWeight: 900, fontFamily: 'monospace', color: '#38bdf8', letterSpacing: '0.05em' }}>
+                  {registrationId}
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.6)', fontWeight: 700, textTransform: 'uppercase' }}>Temporary Password</div>
+                <div style={{ fontSize: '1.35rem', fontWeight: 900, fontFamily: 'monospace', color: '#f97316', letterSpacing: '0.05em' }}>
+                  {`STORM-${registrationId.replace(/\D/g, '').slice(-4) || '2026'}`}
+                </div>
+              </div>
+            </div>
+
+            <p style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.65)', margin: '0 0 1.25rem' }}>
+              🔒 Login using these credentials during the event. You will be prompted to create your private password on first login.
+            </p>
+
+            <a
+              href="http://localhost:5000"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn"
+              style={{
+                background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)',
+                color: '#ffffff',
+                fontWeight: 800,
+                padding: '0.75rem 1.5rem',
+                borderRadius: '9999px',
+                textDecoration: 'none',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                boxShadow: '0 4px 14px rgba(249, 115, 22, 0.4)'
+              }}
+            >
+              [ GO TO LOGIN ] →
+            </a>
+          </div>
+
           {/* Details */}
           <div className="success-details">
             <h3 className="success-details-title">Registration Summary</h3>
