@@ -530,3 +530,30 @@ select.form-control {
     gap: 6px;
   }
 }
+
+/* ---- Academic Details: Year | Branch | Section (3-column row) ---- */
+.form-academic-row {
+  /* Acts as the outer wrapper sitting inside form-grid-2's full-width column */
+  display: flex;
+  flex-direction: column;   /* mobile: stack vertically */
+  gap: 16px;
+}
+
+.form-academic-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+
+/* Desktop: 3 columns side-by-side */
+@media (min-width: 700px) {
+  .form-academic-row {
+    flex-direction: row;
+    gap: 16px;
+  }
+  .form-academic-field {
+    flex: 1;
+  }
+}

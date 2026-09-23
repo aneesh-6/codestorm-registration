@@ -122,7 +122,9 @@ function doPost(e) {
     const rollNumber    = (data.rollNumber || "").trim().toUpperCase();
     const email         = (data.email || "").trim().toLowerCase();
     const mobile        = (data.mobile || "").trim();
-    const yearAndBranch = (data.yearAndBranch || `${data.year || ''} - ${data.branch || ''}`).trim().replace(/^-\s*|\s*-$/g, '');
+    const year          = (data.year || "").trim();
+    const branch        = (data.branch || "").trim();
+    const section       = (data.section || "").trim();
     const screenshotB64 = data.screenshotBase64;
 
     if (!name) {
@@ -137,8 +139,14 @@ function doPost(e) {
     if (!mobile) {
       return createJsonResponse({ success: false, message: "Mobile Number is required." });
     }
-    if (!yearAndBranch) {
-      return createJsonResponse({ success: false, message: "Year & Branch are required." });
+    if (!year) {
+      return createJsonResponse({ success: false, message: "Year is required." });
+    }
+    if (!branch) {
+      return createJsonResponse({ success: false, message: "Branch is required." });
+    }
+    if (!section) {
+      return createJsonResponse({ success: false, message: "Section is required." });
     }
     if (!screenshotB64) {
       return createJsonResponse({ success: false, message: "Payment Screenshot is required." });
@@ -166,7 +174,7 @@ function doPost(e) {
     // 5. Duplicate Submission Protection (Check Roll Number & Email)
     const lastRow = sheet.getLastRow();
     if (lastRow > 1) {
-      // Columns: [1: Timestamp, 2: Name, 3: Roll Number, 4: Email, 5: Mobile, 6: Year & Branch, 7: Screenshot, 8: Reg ID]
+      // Columns: [1: Timestamp, 2: Name, 3: Roll Number, 4: Email, 5: Mobile, 6: Year, 7: Branch, 8: Section, 9: Screenshot, 10: Reg ID]
       const existingData = sheet.getRange(2, 3, lastRow - 1, 2).getValues(); // Read Col 3 (Roll) & Col 4 (Email)
 
       for (let i = 0; i < existingData.length; i++) {
@@ -241,14 +249,16 @@ function doPost(e) {
 
     // 10. Append Registration Row to Google Sheet
     // Columns strictly:
-    // [ Timestamp | Name | Roll Number | Email | Mobile Number | Year & Branch | Payment Screenshot | Registration ID ]
+    // [ Timestamp | Name | Roll Number | Email | Mobile Number | Year | Branch | Section | Payment Screenshot | Registration ID ]
     const newRow = [
       formattedTimestamp,
       name,
       rollNumber,
       email,
       mobile,
-      yearAndBranch,
+      year,
+      branch,
+      section,
       screenshotFormula,
       registrationId
     ];
@@ -257,15 +267,18 @@ function doPost(e) {
 
     // Apply alignment to the newly added row
     const targetRowIndex = sheet.getLastRow();
-    const newRange = sheet.getRange(targetRowIndex, 1, 1, 8);
+    const newRange = sheet.getRange(targetRowIndex, 1, 1, 10);
     newRange.setVerticalAlignment("middle");
 
     // Left-align text columns, center ID, timestamp, and screenshot link
-    sheet.getRange(targetRowIndex, 1).setHorizontalAlignment("center"); // Timestamp
-    sheet.getRange(targetRowIndex, 3).setHorizontalAlignment("center"); // Roll Number
-    sheet.getRange(targetRowIndex, 5).setHorizontalAlignment("center"); // Mobile
-    sheet.getRange(targetRowIndex, 7).setHorizontalAlignment("center"); // Screenshot Link
-    sheet.getRange(targetRowIndex, 8).setHorizontalAlignment("center"); // Registration ID
+    sheet.getRange(targetRowIndex, 1).setHorizontalAlignment("center");  // Timestamp
+    sheet.getRange(targetRowIndex, 3).setHorizontalAlignment("center");  // Roll Number
+    sheet.getRange(targetRowIndex, 5).setHorizontalAlignment("center");  // Mobile
+    sheet.getRange(targetRowIndex, 6).setHorizontalAlignment("center");  // Year
+    sheet.getRange(targetRowIndex, 7).setHorizontalAlignment("center");  // Branch
+    sheet.getRange(targetRowIndex, 8).setHorizontalAlignment("center");  // Section
+    sheet.getRange(targetRowIndex, 9).setHorizontalAlignment("center");  // Screenshot Link
+    sheet.getRange(targetRowIndex, 10).setHorizontalAlignment("center"); // Registration ID
 
     // 11. Return JSON Success Response
     return createJsonResponse({
@@ -313,8 +326,8 @@ function generateNextRegistrationId(sheet) {
   let maxNumber = 0;
 
   if (lastRow > 1) {
-    // Column 8 is Registration ID
-    const idValues = sheet.getRange(2, 8, lastRow - 1, 1).getValues();
+    // Column 10 is Registration ID
+    const idValues = sheet.getRange(2, 10, lastRow - 1, 1).getValues();
 
     for (let i = 0; i < idValues.length; i++) {
       const val = String(idValues[i][0]).trim();
@@ -342,7 +355,9 @@ function initSheetFormatting(sheet) {
     "Roll Number",
     "Email",
     "Mobile Number",
-    "Year & Branch",
+    "Year",
+    "Branch",
+    "Section",
     "Payment Screenshot",
     "Registration ID"
   ];
@@ -366,14 +381,16 @@ function initSheetFormatting(sheet) {
   sheet.setRowHeight(1, 40);
 
   // Set individual column widths for readability
-  sheet.setColumnWidth(1, 170); // Timestamp
-  sheet.setColumnWidth(2, 220); // Name
-  sheet.setColumnWidth(3, 150); // Roll Number
-  sheet.setColumnWidth(4, 240); // Email
-  sheet.setColumnWidth(5, 140); // Mobile Number
-  sheet.setColumnWidth(6, 180); // Year & Branch
-  sheet.setColumnWidth(7, 180); // Payment Screenshot
-  sheet.setColumnWidth(8, 200); // Registration ID
+  sheet.setColumnWidth(1,  170); // Timestamp
+  sheet.setColumnWidth(2,  220); // Name
+  sheet.setColumnWidth(3,  150); // Roll Number
+  sheet.setColumnWidth(4,  240); // Email
+  sheet.setColumnWidth(5,  140); // Mobile Number
+  sheet.setColumnWidth(6,  120); // Year
+  sheet.setColumnWidth(7,  200); // Branch
+  sheet.setColumnWidth(8,  100); // Section
+  sheet.setColumnWidth(9,  180); // Payment Screenshot
+  sheet.setColumnWidth(10, 200); // Registration ID
 
   // Enable filter if not already enabled
   try {
@@ -445,9 +462,8 @@ function testRegistration() {
         email: "test_" + Date.now() + "@example.com",
         mobile: "9876543210",
         year: "3rd Year",
-        branch: "CSE",
-        yearAndBranch: "3rd Year - CSE",
-        transactionId: "UPI123456789",
+        branch: "CSE \u2013 Data Science (CSD)",
+        section: "A",
         screenshotBase64: testBase64,
         screenshotType: "image/png"
       })

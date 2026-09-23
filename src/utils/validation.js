@@ -1,6 +1,5 @@
 // Validation utilities for CODESTORM registration form
-// Strictly matches the required 5 fields + payment screenshot:
-// Name | Roll Number | Email | Mobile Number | Year & Branch | Payment Screenshot
+// Fields: Name | Roll Number | Email | Mobile Number | Year | Branch | Section | Payment Screenshot
 
 export const validators = {
   name: (value) => {
@@ -30,8 +29,18 @@ export const validators = {
     return null;
   },
 
-  yearAndBranch: (value) => {
-    if (!value || value === '') return 'Please select your Year & Branch.';
+  year: (value) => {
+    if (!value || value === '') return 'Please select your Year.';
+    return null;
+  },
+
+  branch: (value) => {
+    if (!value || value === '') return 'Please select your Branch.';
+    return null;
+  },
+
+  section: (value) => {
+    if (!value || value === '') return 'Please select your Section.';
     return null;
   },
 

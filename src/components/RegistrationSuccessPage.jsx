@@ -17,7 +17,9 @@ export default function RegistrationSuccessPage({ registrationData, onBack }) {
     registrationId: 'CODESTORM-2026-0001',
     name: 'Registered Participant',
     rollNumber: 'N/A',
-    yearAndBranch: 'CSE',
+    year: 'N/A',
+    branch: 'N/A',
+    section: 'N/A',
   };
 
   const whatsappLink = EVENT_CONFIG.whatsappGroupLink;
@@ -217,8 +219,16 @@ export default function RegistrationSuccessPage({ registrationData, onBack }) {
                 <span className="reg-item-value mono-val">{data.rollNumber}</span>
               </div>
               <div className="reg-summary-item">
-                <span className="reg-item-label">Year & Branch</span>
-                <span className="reg-item-value">{data.yearAndBranch}</span>
+                <span className="reg-item-label">Year</span>
+                <span className="reg-item-value">{data.year || 'N/A'}</span>
+              </div>
+              <div className="reg-summary-item">
+                <span className="reg-item-label">Branch</span>
+                <span className="reg-item-value">{data.branch || 'N/A'}</span>
+              </div>
+              <div className="reg-summary-item">
+                <span className="reg-item-label">Section</span>
+                <span className="reg-item-value">{data.section || 'N/A'}</span>
               </div>
               <div className="reg-summary-item">
                 <span className="reg-item-label">Status</span>

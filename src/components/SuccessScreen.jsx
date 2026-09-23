@@ -2,7 +2,7 @@ import { useRef } from 'react';
 import './SuccessScreen.css';
 
 export default function SuccessScreen({ data, onBack }) {
-  const { registrationId, name, rollNumber, yearAndBranch, email, mobile, transactionId } = data;
+  const { registrationId, name, rollNumber, year, branch, section, email, mobile, transactionId } = data;
   const timestamp = new Date().toLocaleString('en-IN', {
     day: '2-digit', month: 'long', year: 'numeric',
     hour: '2-digit', minute: '2-digit', hour12: true,
@@ -20,7 +20,9 @@ Malla Reddy Engineering College and Management Sciences
 REGISTRATION ID: ${registrationId}
 Name:            ${name}
 Roll Number:     ${rollNumber || 'N/A'}
-Year & Branch:   ${yearAndBranch || 'N/A'}
+Year:            ${year || 'N/A'}
+Branch:          ${branch || 'N/A'}
+Section:         ${section || 'N/A'}
 Email:           ${email}
 Mobile:          ${mobile}
 Transaction ID:  ${transactionId || 'N/A'}
@@ -87,10 +89,22 @@ THINK • DEBUG • PREDICT • CODE
                   <span className="success-detail-value success-detail-mono">{rollNumber}</span>
                 </div>
               )}
-              {yearAndBranch && (
+              {year && (
                 <div className="success-detail-item">
-                  <span className="success-detail-label">Year & Branch</span>
-                  <span className="success-detail-value">{yearAndBranch}</span>
+                  <span className="success-detail-label">Year</span>
+                  <span className="success-detail-value">{year}</span>
+                </div>
+              )}
+              {branch && (
+                <div className="success-detail-item">
+                  <span className="success-detail-label">Branch</span>
+                  <span className="success-detail-value">{branch}</span>
+                </div>
+              )}
+              {section && (
+                <div className="success-detail-item">
+                  <span className="success-detail-label">Section</span>
+                  <span className="success-detail-value">{section}</span>
                 </div>
               )}
               <div className="success-detail-item">

@@ -3,55 +3,19 @@ import { validators, validateAll } from '../utils/validation';
 import { GOOGLE_SCRIPT_URL } from '../config';
 import './RegistrationSection.css';
 
-const YEAR_AND_BRANCH_OPTIONS = [
-  // 1st Year
-  '1st Year – CSE',
-  '1st Year – CSE (Data Science)',
-  '1st Year – CSE (AI & ML)',
-  '1st Year – ECE',
-  '1st Year – EEE',
-  '1st Year – Mechanical',
-  '1st Year – Civil',
-  '1st Year – IT',
-  '1st Year – Other',
-  // 2nd Year
-  '2nd Year – CSE',
-  '2nd Year – CSE (Data Science)',
-  '2nd Year – CSE (AI & ML)',
-  '2nd Year – ECE',
-  '2nd Year – EEE',
-  '2nd Year – Mechanical',
-  '2nd Year – Civil',
-  '2nd Year – IT',
-  '2nd Year – Other',
-  // 3rd Year
-  '3rd Year – CSE',
-  '3rd Year – CSE (Data Science)',
-  '3rd Year – CSE (AI & ML)',
-  '3rd Year – ECE',
-  '3rd Year – EEE',
-  '3rd Year – Mechanical',
-  '3rd Year – Civil',
-  '3rd Year – IT',
-  '3rd Year – Other',
-  // 4th Year
-  '4th Year – CSE',
-  '4th Year – CSE (Data Science)',
-  '4th Year – CSE (AI & ML)',
-  '4th Year – ECE',
-  '4th Year – EEE',
-  '4th Year – Mechanical',
-  '4th Year – Civil',
-  '4th Year – IT',
-  '4th Year – Other',
-];
+// Academic detail options (exact values as specified)
+const YEAR_OPTIONS    = ['2nd Year', '3rd Year', '4th Year'];
+const BRANCH_OPTIONS  = ['CSE – Data Science (CSD)', 'Cyber Security'];
+const SECTION_OPTIONS = ['A', 'B', 'C'];
 
 const INITIAL_FORM = {
   name: '',
   rollNumber: '',
   email: '',
   mobile: '',
-  yearAndBranch: '',
+  year: '',
+  branch: '',
+  section: '',
   paymentScreenshot: null,
 };
 
@@ -132,21 +96,14 @@ export default function RegistrationSection({ onRegistrationSuccess }) {
         screenshotBase64 = await readFileAsBase64(form.paymentScreenshot);
       }
 
-      // Derive year and branch from the selected option (e.g. "2nd Year – CSE (Data Science)")
-      const selectedOption = form.yearAndBranch;
-      const yearMatch = selectedOption.match(/^(\d(?:st|nd|rd|th) Year)/);
-      const branchMatch = selectedOption.match(/–\s*(.+)$/);
-      const derivedYear = yearMatch ? yearMatch[1] : selectedOption;
-      const derivedBranch = branchMatch ? branchMatch[1].trim() : selectedOption;
-
       const payload = {
         name: form.name.trim(),
         rollNumber: form.rollNumber.trim().toUpperCase(),
         email: form.email.trim(),
         mobile: form.mobile.trim(),
-        year: derivedYear,
-        branch: derivedBranch,
-        yearAndBranch: form.yearAndBranch,
+        year: form.year,
+        branch: form.branch,
+        section: form.section,
         screenshotBase64: screenshotBase64,
         screenshotType: form.paymentScreenshot?.type || 'image/jpeg',
         screenshotName: form.paymentScreenshot?.name || 'screenshot.jpg',
@@ -178,7 +135,9 @@ export default function RegistrationSection({ onRegistrationSuccess }) {
         rollNumber: form.rollNumber.trim().toUpperCase(),
         email: form.email,
         mobile: form.mobile,
-        yearAndBranch: form.yearAndBranch,
+        year: form.year,
+        branch: form.branch,
+        section: form.section,
       };
 
       if (onRegistrationSuccess) {
@@ -423,44 +382,78 @@ export default function RegistrationSection({ onRegistrationSuccess }) {
                   {renderFieldError('mobile')}
                 </div>
 
-                {/* Year & Branch – open to all years & all branches */}
-                <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-                  <label htmlFor="yearAndBranch" className="form-label">
-                    Year &amp; Branch <span className="required" aria-label="required">*</span>
-                  </label>
-                  <select
-                    id="yearAndBranch"
-                    name="yearAndBranch"
-                    value={form.yearAndBranch}
-                    onChange={handleChange}
-                    onBlur={handleBlur}
-                    className={fieldClass('yearAndBranch')}
-                    aria-required="true"
-                    aria-describedby="yearAndBranch-error"
-                  >
-                    <option value="">Select your Year &amp; Branch (All years &amp; branches welcome)</option>
-                    <optgroup label="1st Year">
-                      {YEAR_AND_BRANCH_OPTIONS.filter(o => o.startsWith('1st')).map(opt => (
+                {/* ── Academic Details: Year | Branch | Section (3 separate columns) ── */}
+                <div className="form-group form-academic-row" style={{ gridColumn: '1 / -1' }}>
+
+                  {/* Year */}
+                  <div className="form-academic-field">
+                    <label htmlFor="year" className="form-label">
+                      Year <span className="required" aria-label="required">*</span>
+                    </label>
+                    <select
+                      id="year"
+                      name="year"
+                      value={form.year}
+                      onChange={handleChange}
+                      onBlur={handleBlur}
+                      className={fieldClass('year')}
+                      aria-required="true"
+                      aria-describedby="year-error"
+                    >
+                      <option value="">Select Year</option>
+                      {YEAR_OPTIONS.map(opt => (
                         <option key={opt} value={opt}>{opt}</option>
                       ))}
-                    </optgroup>
-                    <optgroup label="2nd Year">
-                      {YEAR_AND_BRANCH_OPTIONS.filter(o => o.startsWith('2nd')).map(opt => (
+                    </select>
+                    {renderFieldError('year')}
+                  </div>
+
+                  {/* Branch */}
+                  <div className="form-academic-field">
+                    <label htmlFor="branch" className="form-label">
+                      Branch <span className="required" aria-label="required">*</span>
+                    </label>
+                    <select
+                      id="branch"
+                      name="branch"
+                      value={form.branch}
+                      onChange={handleChange}
+                      onBlur={handleBlur}
+                      className={fieldClass('branch')}
+                      aria-required="true"
+                      aria-describedby="branch-error"
+                    >
+                      <option value="">Select Branch</option>
+                      {BRANCH_OPTIONS.map(opt => (
                         <option key={opt} value={opt}>{opt}</option>
                       ))}
-                    </optgroup>
-                    <optgroup label="3rd Year">
-                      {YEAR_AND_BRANCH_OPTIONS.filter(o => o.startsWith('3rd')).map(opt => (
+                    </select>
+                    {renderFieldError('branch')}
+                  </div>
+
+                  {/* Section */}
+                  <div className="form-academic-field">
+                    <label htmlFor="section" className="form-label">
+                      Section <span className="required" aria-label="required">*</span>
+                    </label>
+                    <select
+                      id="section"
+                      name="section"
+                      value={form.section}
+                      onChange={handleChange}
+                      onBlur={handleBlur}
+                      className={fieldClass('section')}
+                      aria-required="true"
+                      aria-describedby="section-error"
+                    >
+                      <option value="">Select Section</option>
+                      {SECTION_OPTIONS.map(opt => (
                         <option key={opt} value={opt}>{opt}</option>
                       ))}
-                    </optgroup>
-                    <optgroup label="4th Year">
-                      {YEAR_AND_BRANCH_OPTIONS.filter(o => o.startsWith('4th')).map(opt => (
-                        <option key={opt} value={opt}>{opt}</option>
-                      ))}
-                    </optgroup>
-                  </select>
-                  {renderFieldError('yearAndBranch')}
+                    </select>
+                    {renderFieldError('section')}
+                  </div>
+
                 </div>
               </div>
             </div>
