@@ -1,12 +1,28 @@
 const express  = require('express');
 const router   = express.Router();
 const Registration = require('../models/Registration');
+const User = require('../models/User');
 const upload   = require('../middleware/upload');
-const { generateUniqueRegistrationId } = require('../utils/generateId');
+const {
+  generateUniqueRegistrationId,
+  generateUniqueParticipantId,
+  generateTemporaryPassword,
+} = require('../utils/generateId');
+
+let bcrypt;
+try {
+  bcrypt = require('bcryptjs');
+} catch {
+  try {
+    bcrypt = require('../../../codestorm-platform/server/node_modules/bcryptjs');
+  } catch {
+    bcrypt = null;
+  }
+}
 
 /**
  * POST /api/register
- * Register a new participant for CODESTORM
+ * Register a new participant for CODESTORM and generate credentials
  */
 router.post('/register', upload.single('paymentScreenshot'), async (req, res) => {
   try {
@@ -37,21 +53,33 @@ router.post('/register', upload.single('paymentScreenshot'), async (req, res) =>
     const dupEmail = await Registration.findOne({ email: email.trim().toLowerCase() });
     if (dupEmail) return res.status(409).json({ success: false, message: 'This email address is already registered.' });
 
-    const dupRoll = await Registration.findOne({ rollNumber: rollNumber.trim() });
+    const dupRoll = await Registration.findOne({ rollNumber: rollNumber.trim().toUpperCase() });
     if (dupRoll)  return res.status(409).json({ success: false, message: 'This roll number is already registered.' });
 
     const dupTxn = await Registration.findOne({ transactionId: transactionId.trim() });
     if (dupTxn)   return res.status(409).json({ success: false, message: 'This transaction ID has already been used.' });
 
-    // --- Generate unique ID ---
+    // --- Generate unique Registration ID ---
     const registrationId = await generateUniqueRegistrationId(Registration);
+
+    // --- Generate unique Participant ID (CS26-0001, CS26-0002...) ---
+    const participantId = await generateUniqueParticipantId(Registration, User, registrationId);
+
+    // --- Generate secure random temporary password & hash ---
+    const temporaryPassword = generateTemporaryPassword(10);
+    const salt = bcrypt ? bcrypt.genSaltSync(10) : '$2b$10$abcdefghijklmnopqrstuu';
+    const passwordHash = bcrypt ? bcrypt.hashSync(temporaryPassword, salt) : temporaryPassword;
 
     // --- Save registration ---
     const reg = new Registration({
       registrationId,
+      participantId,
+      passwordHash,
+      role: 'participant',
+      mustChangePassword: true,
       name:        name.trim(),
       college:     college.trim(),
-      rollNumber:  rollNumber.trim(),
+      rollNumber:  rollNumber.trim().toUpperCase(),
       branch,
       year,
       email:       email.trim().toLowerCase(),
@@ -64,10 +92,28 @@ router.post('/register', upload.single('paymentScreenshot'), async (req, res) =>
 
     await reg.save();
 
+    // --- Save corresponding User account ---
+    try {
+      const user = new User({
+        participantId,
+        registrationId,
+        name: reg.name,
+        email: reg.email,
+        passwordHash,
+        role: 'participant',
+        mustChangePassword: true,
+      });
+      await user.save();
+    } catch (userErr) {
+      console.error('[User Creation Warning]', userErr.message);
+    }
+
     res.status(201).json({
       success: true,
       message: 'Registration successful!',
       registrationId: reg.registrationId,
+      participantId: reg.participantId,
+      temporaryPassword,
       name: reg.name,
       email: reg.email,
     });

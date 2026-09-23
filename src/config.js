@@ -39,3 +39,18 @@ export const isGoogleScriptConfigured = () => {
     !GOOGLE_SCRIPT_URL.includes("YOUR_")
   );
 };
+
+/**
+ * CodeStorm Event Conducting Platform URL (Where participants log in to compete)
+ * Configurable via VITE_EVENT_PLATFORM_URL
+ */
+export const EVENT_PLATFORM_URL =
+  import.meta.env.VITE_EVENT_PLATFORM_URL || "http://localhost:5000";
+
+/**
+ * Backend API URL (for participant account creation)
+ * Configurable via VITE_API_URL. In development, Vite dev proxy handles /api -> http://localhost:5000.
+ */
+export const API_URL =
+  import.meta.env.VITE_API_URL || "";
+

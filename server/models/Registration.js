@@ -70,6 +70,22 @@ const registrationSchema = new mongoose.Schema(
         message: 'Declaration must be confirmed',
       },
     },
+    participantId: {
+      type: String,
+      sparse: true,
+      unique: true,
+    },
+    passwordHash: {
+      type: String,
+    },
+    role: {
+      type: String,
+      default: 'participant',
+    },
+    mustChangePassword: {
+      type: Boolean,
+      default: true,
+    },
   },
   {
     timestamps: true,

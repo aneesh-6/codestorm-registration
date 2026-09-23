@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { EVENT_CONFIG } from '../config';
+import { EVENT_CONFIG, EVENT_PLATFORM_URL } from '../config';
 import './RegistrationSuccessPage.css';
 
 export default function RegistrationSuccessPage({ registrationData, onBack }) {
-  const [copied, setCopied] = useState(false);
+  const [copiedId, setCopiedId] = useState(false);
+  const [copiedCreds, setCopiedCreds] = useState(false);
 
   // Fallback to data stored in sessionStorage if refreshed directly
   const data = registrationData || (() => {
@@ -45,8 +46,20 @@ export default function RegistrationSuccessPage({ registrationData, onBack }) {
   const handleCopyId = () => {
     if (data.registrationId) {
       navigator.clipboard.writeText(data.registrationId);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setCopiedId(true);
+      setTimeout(() => setCopiedId(false), 2000);
+    }
+  };
+
+  const handleCopyCredentials = () => {
+    const participantId = data.participantId || 'CS26-0001';
+    const tempPassword = data.temporaryPassword || 'K7mP4xQ9';
+    const textToCopy = `CodeStorm 2026 Login Credentials\n\nParticipant ID: ${participantId}\nTemporary Password: ${tempPassword}`;
+    
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(textToCopy);
+      setCopiedCreds(true);
+      setTimeout(() => setCopiedCreds(false), 2500);
     }
   };
 
@@ -106,7 +119,7 @@ export default function RegistrationSuccessPage({ registrationData, onBack }) {
                 title="Copy Registration ID"
                 aria-label="Copy Registration ID"
               >
-                {copied ? (
+                {copiedId ? (
                   <>
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2.5">
                       <polyline points="20 6 9 17 4 12"/>
@@ -124,67 +137,146 @@ export default function RegistrationSuccessPage({ registrationData, onBack }) {
                 )}
               </button>
             </div>
-          {/* Official Event Conducting Platform Credentials Box */}
-          <div style={{
-            background: 'linear-gradient(135deg, #1a2d5a 0%, #0f1c3d 100%)',
-            color: '#ffffff',
-            borderRadius: '16px',
-            padding: '1.75rem',
-            margin: '1.5rem 0 2rem',
-            textAlign: 'left',
-            border: '2px solid #f97316',
-            boxShadow: '0 8px 24px rgba(249, 115, 22, 0.2)'
-          }}>
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', background: 'rgba(249, 115, 22, 0.25)', color: '#fb923c', padding: '0.2rem 0.75rem', borderRadius: '9999px', fontSize: '0.78rem', fontWeight: 800, marginBottom: '0.75rem' }}>
-              EVENT CONDUCTING PLATFORM CREDENTIALS
-            </div>
-            <h3 style={{ fontSize: '1.35rem', fontWeight: 900, color: '#ffffff', margin: '0 0 0.5rem' }}>
-              Your Competition Account is Ready! 🎉
-            </h3>
-            <p style={{ fontSize: '0.88rem', color: 'rgba(255,255,255,0.8)', margin: '0 0 1.25rem' }}>
-              Use these credentials to log in to the official CodeStorm 2026 competition arena during the live event.
-            </p>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem', background: 'rgba(255,255,255,0.08)', padding: '1rem 1.25rem', borderRadius: '10px', marginBottom: '1.25rem' }}>
-              <div>
-                <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.6)', fontWeight: 700, textTransform: 'uppercase' }}>Participant ID</div>
-                <div style={{ fontSize: '1.35rem', fontWeight: 900, fontFamily: 'monospace', color: '#38bdf8', letterSpacing: '0.05em' }}>
-                  {data.participantId || data.registrationId}
-                </div>
-              </div>
-              <div>
-                <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.6)', fontWeight: 700, textTransform: 'uppercase' }}>Temporary Password</div>
-                <div style={{ fontSize: '1.35rem', fontWeight: 900, fontFamily: 'monospace', color: '#f97316', letterSpacing: '0.05em' }}>
-                  {data.temporaryPassword || `STORM-${(data.registrationId || '1042').replace(/\D/g, '').slice(-4) || '2026'}`}
-                </div>
-              </div>
-            </div>
-
-            <p style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.65)', margin: '0 0 1.25rem' }}>
-              🔒 Login using these credentials during the event. You will be prompted to create your private password on first login.
-            </p>
-
-            <a
-              href="http://localhost:5000"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn"
-              style={{
-                background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)',
-                color: '#ffffff',
-                fontWeight: 800,
-                padding: '0.75rem 1.5rem',
-                borderRadius: '9999px',
-                textDecoration: 'none',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-                boxShadow: '0 4px 14px rgba(249, 115, 22, 0.4)'
-              }}
-            >
-              [ GO TO LOGIN ] →
-            </a>
           </div>
+
+          {/* Official Event Conducting Platform Credentials Section */}
+          <section
+            className="success-credentials-box no-print"
+            aria-label="Event Login Credentials"
+            style={{
+              background: 'linear-gradient(135deg, #0b1329 0%, #1a2d5a 100%)',
+              color: '#ffffff',
+              borderRadius: '16px',
+              padding: '24px 28px',
+              margin: '20px 0 28px',
+              textAlign: 'left',
+              border: '2px solid #f97316',
+              boxShadow: '0 10px 28px rgba(11, 19, 41, 0.3)',
+            }}
+          >
+            <div style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              background: 'rgba(249, 115, 22, 0.2)',
+              color: '#fb923c',
+              padding: '4px 12px',
+              borderRadius: '9999px',
+              fontSize: '0.75rem',
+              fontWeight: 800,
+              letterSpacing: '0.08em',
+              textTransform: 'uppercase',
+              marginBottom: '12px'
+            }}>
+              YOUR EVENT LOGIN CREDENTIALS
+            </div>
+
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+              gap: '16px',
+              background: 'rgba(255, 255, 255, 0.06)',
+              border: '1px solid rgba(255, 255, 255, 0.12)',
+              padding: '16px 20px',
+              borderRadius: '12px',
+              marginBottom: '16px'
+            }}>
+              <div>
+                <div style={{ fontSize: '0.75rem', color: 'rgba(255, 255, 255, 0.65)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Participant ID
+                </div>
+                <div style={{ fontSize: '1.5rem', fontWeight: 900, fontFamily: 'monospace', color: '#38bdf8', letterSpacing: '0.06em', marginTop: '4px' }}>
+                  {data.participantId || 'CS26-0001'}
+                </div>
+              </div>
+
+              <div>
+                <div style={{ fontSize: '0.75rem', color: 'rgba(255, 255, 255, 0.65)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Temporary Password
+                </div>
+                <div style={{ fontSize: '1.5rem', fontWeight: 900, fontFamily: 'monospace', color: '#f97316', letterSpacing: '0.06em', marginTop: '4px' }}>
+                  {data.temporaryPassword || 'K7mP4xQ9'}
+                </div>
+              </div>
+            </div>
+
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              fontSize: '0.875rem',
+              color: '#fbbf24',
+              fontWeight: 500,
+              marginBottom: '20px',
+              lineHeight: 1.4
+            }}>
+              <span>⚠️</span>
+              <span>
+                Save these credentials safely. You will need them to access the CodeStorm Event Platform.
+              </span>
+            </div>
+
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center' }}>
+              <button
+                type="button"
+                onClick={handleCopyCredentials}
+                style={{
+                  background: copiedCreds ? '#10b981' : 'rgba(255, 255, 255, 0.12)',
+                  border: copiedCreds ? '1px solid #10b981' : '1px solid rgba(255, 255, 255, 0.25)',
+                  color: '#ffffff',
+                  fontWeight: 700,
+                  fontSize: '0.875rem',
+                  padding: '10px 20px',
+                  borderRadius: '9999px',
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  transition: 'all 0.2s ease',
+                }}
+              >
+                {copiedCreds ? (
+                  <>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <polyline points="20 6 9 17 4 12"/>
+                    </svg>
+                    <span>✓ Credentials copied</span>
+                  </>
+                ) : (
+                  <>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                      <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+                    </svg>
+                    <span>[ COPY CREDENTIALS ]</span>
+                  </>
+                )}
+              </button>
+
+              <a
+                href={EVENT_PLATFORM_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)',
+                  color: '#ffffff',
+                  fontWeight: 800,
+                  fontSize: '0.875rem',
+                  padding: '10px 22px',
+                  borderRadius: '9999px',
+                  textDecoration: 'none',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  boxShadow: '0 4px 14px rgba(249, 115, 22, 0.35)',
+                  transition: 'all 0.2s ease',
+                }}
+              >
+                <span>[ GO TO EVENT LOGIN ]</span>
+                <span aria-hidden="true">→</span>
+              </a>
+            </div>
+          </section>
 
           {/* Submission Acknowledgement */}
           <div className="success-ack-box">

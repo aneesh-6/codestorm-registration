@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { validators, validateAll } from '../utils/validation';
-import { GOOGLE_SCRIPT_URL } from '../config';
+import { GOOGLE_SCRIPT_URL, API_URL } from '../config';
 import './RegistrationSection.css';
 
 // Academic detail options (exact values as specified)
@@ -82,13 +82,6 @@ export default function RegistrationSection({ onRegistrationSuccess }) {
     setSubmitting(true);
     setApiError('');
 
-    // Check if Google Apps Script URL is configured
-    if (!GOOGLE_SCRIPT_URL || GOOGLE_SCRIPT_URL.trim() === '' || !GOOGLE_SCRIPT_URL.startsWith('https://script.google.com/macros/s/')) {
-      setSubmitting(false);
-      setApiError('Google Apps Script Web App URL is not configured yet. Please deploy your Google Apps Script and set VITE_GOOGLE_SCRIPT_URL in your .env file or src/config.js.');
-      return;
-    }
-
     try {
       // Read payment screenshot as Base64 data URL
       let screenshotBase64 = '';
@@ -109,28 +102,69 @@ export default function RegistrationSection({ onRegistrationSuccess }) {
         screenshotName: form.paymentScreenshot?.name || 'screenshot.jpg',
       };
 
-      // POST to Google Apps Script Web App using text/plain to avoid CORS preflight rejection
-      const res = await fetch(GOOGLE_SCRIPT_URL, {
+      let registrationId = null;
+      const isGoogleConfigured = GOOGLE_SCRIPT_URL && GOOGLE_SCRIPT_URL.trim() !== '' && GOOGLE_SCRIPT_URL.startsWith('https://script.google.com/macros/s/');
+
+      // Step 1: Save Registration Record (Google Sheets or Backend API)
+      if (isGoogleConfigured) {
+        // POST to Google Apps Script Web App using text/plain to avoid CORS preflight rejection
+        const res = await fetch(GOOGLE_SCRIPT_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'text/plain;charset=utf-8',
+          },
+          body: JSON.stringify(payload),
+        });
+
+        const json = await res.json();
+
+        if (!res.ok || !json.success) {
+          setApiError(json.message || 'Registration could not be completed. Please try again.');
+          const errorBanner = document.querySelector('.api-error-banner');
+          if (errorBanner) errorBanner.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          return;
+        }
+
+        registrationId = json.registrationId;
+      }
+
+      // Step 2: Automatically generate secure Participant Login Credentials
+      // ONLY after registration has been accepted
+      const accountEndpoint = `${API_URL}/api/register`;
+      const credRes = await fetch(accountEndpoint, {
         method: 'POST',
         headers: {
-          'Content-Type': 'text/plain;charset=utf-8',
+          'Content-Type': 'application/json',
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          ...payload,
+          registrationId: registrationId || undefined,
+        }),
       });
 
-      const json = await res.json();
+      const credJson = await credRes.json();
 
-      if (!res.ok || !json.success) {
-        // Keeps user's entered form data on the page
-        setApiError(json.message || 'Registration could not be completed. Please try again.');
+      if (!credRes.ok || !credJson.success) {
+        // If participant account creation fails, DO NOT show "Registration Successful"
+        setApiError(
+          credJson.error ||
+          credJson.message ||
+          'Registration was received, but participant login credentials could not be created. Please contact our event coordinators.'
+        );
         const errorBanner = document.querySelector('.api-error-banner');
         if (errorBanner) errorBanner.scrollIntoView({ behavior: 'smooth', block: 'center' });
         return;
       }
 
-      // Registration successfully recorded in Google Sheets
+      const finalRegistrationId = registrationId || credJson.registrationId || 'CODESTORM-2026-0001';
+      const participantId = credJson.participantId;
+      const temporaryPassword = credJson.temporaryPassword;
+
+      // Registration successfully recorded with secure credentials
       const successData = {
-        registrationId: json.registrationId,
+        registrationId: finalRegistrationId,
+        participantId: participantId,
+        temporaryPassword: temporaryPassword,
         name: form.name,
         rollNumber: form.rollNumber.trim().toUpperCase(),
         email: form.email,
