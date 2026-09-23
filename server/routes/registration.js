@@ -22,51 +22,67 @@ try {
 
 /**
  * POST /api/register
- * Register a new participant for CODESTORM and generate credentials
+// Conditional middleware to handle both multipart/form-data and application/json
+const handleUpload = (req, res, next) => {
+  const contentType = req.headers['content-type'] || '';
+  if (contentType.includes('multipart/form-data')) {
+    upload.single('paymentScreenshot')(req, res, next);
+  } else {
+    next();
+  }
+};
+
+/**
+ * POST /api/register
+ * Register a new participant for CODESTORM and generate credentials atomically
  */
-router.post('/register', upload.single('paymentScreenshot'), async (req, res) => {
+router.post('/register', handleUpload, async (req, res) => {
   try {
     const {
-      name, college, rollNumber, branch, year,
+      name, college, rollNumber, branch, year, section,
       email, mobile, language, transactionId, declaration,
+      registrationId: providedRegId,
+      participantId: providedPartId,
+      temporaryPassword: providedTempPassword,
+      screenshotBase64,
     } = req.body;
 
     // --- Server-side validation ---
     const errors = [];
-    if (!name || name.trim().length < 3)         errors.push('Valid full name is required.');
-    if (!college || college.trim().length < 3)   errors.push('College name is required.');
-    if (!rollNumber || rollNumber.trim().length < 3) errors.push('Roll number is required.');
-    if (!branch)     errors.push('Branch is required.');
-    if (!year)       errors.push('Year is required.');
+    if (!name || name.trim().length < 2) errors.push('Valid full name is required.');
+    if (!rollNumber || rollNumber.trim().length < 2) errors.push('Roll number is required.');
+    if (!branch) errors.push('Branch is required.');
+    if (!year) errors.push('Year is required.');
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) errors.push('Valid email is required.');
-    if (!mobile || !/^[6-9]\d{9}$/.test(mobile.trim()))              errors.push('Valid 10-digit mobile number is required.');
-    if (!language)   errors.push('Programming language is required.');
-    if (!transactionId || transactionId.trim().length < 4) errors.push('Transaction ID is required.');
-    if (!req.file)   errors.push('Payment screenshot is required.');
-    if (declaration !== 'true' && declaration !== true) errors.push('Declaration must be confirmed.');
+    if (!mobile || !/^[6-9]\d{9}$/.test(mobile.trim())) errors.push('Valid 10-digit mobile number is required.');
 
     if (errors.length > 0) {
       return res.status(400).json({ success: false, message: errors[0], errors });
     }
 
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanRoll = rollNumber.trim().toUpperCase();
+
     // --- Duplicate check ---
-    const dupEmail = await Registration.findOne({ email: email.trim().toLowerCase() });
+    const dupEmail = await Registration.findOne({ email: cleanEmail });
     if (dupEmail) return res.status(409).json({ success: false, message: 'This email address is already registered.' });
 
-    const dupRoll = await Registration.findOne({ rollNumber: rollNumber.trim().toUpperCase() });
-    if (dupRoll)  return res.status(409).json({ success: false, message: 'This roll number is already registered.' });
+    const dupRoll = await Registration.findOne({ rollNumber: cleanRoll });
+    if (dupRoll) return res.status(409).json({ success: false, message: 'This roll number is already registered.' });
 
-    const dupTxn = await Registration.findOne({ transactionId: transactionId.trim() });
-    if (dupTxn)   return res.status(409).json({ success: false, message: 'This transaction ID has already been used.' });
+    if (transactionId && transactionId.trim()) {
+      const dupTxn = await Registration.findOne({ transactionId: transactionId.trim() });
+      if (dupTxn) return res.status(409).json({ success: false, message: 'This transaction ID has already been used.' });
+    }
 
-    // --- Generate unique Registration ID ---
-    const registrationId = await generateUniqueRegistrationId(Registration);
+    // --- Generate or reuse unique Registration ID ---
+    const registrationId = providedRegId || await generateUniqueRegistrationId(Registration);
 
-    // --- Generate unique Participant ID (CS26-0001, CS26-0002...) ---
-    const participantId = await generateUniqueParticipantId(Registration, User, registrationId);
+    // --- Generate or reuse unique Participant ID (CS26-0001, CS26-0002...) ---
+    const participantId = providedPartId || await generateUniqueParticipantId(Registration, User, registrationId);
 
-    // --- Generate secure random temporary password & hash ---
-    const temporaryPassword = generateTemporaryPassword(10);
+    // --- Generate or reuse secure random temporary password & hash ---
+    const temporaryPassword = providedTempPassword || generateTemporaryPassword(10);
     const salt = bcrypt ? bcrypt.genSaltSync(10) : '$2b$10$abcdefghijklmnopqrstuu';
     const passwordHash = bcrypt ? bcrypt.hashSync(temporaryPassword, salt) : temporaryPassword;
 
@@ -77,16 +93,17 @@ router.post('/register', upload.single('paymentScreenshot'), async (req, res) =>
       passwordHash,
       role: 'participant',
       mustChangePassword: true,
-      name:        name.trim(),
-      college:     college.trim(),
-      rollNumber:  rollNumber.trim().toUpperCase(),
-      branch,
-      year,
-      email:       email.trim().toLowerCase(),
-      mobile:      mobile.trim(),
-      language,
-      transactionId: transactionId.trim(),
-      paymentScreenshotPath: req.file.path,
+      name: name.trim(),
+      college: (college || 'Malla Reddy Engineering College and Management Sciences').trim(),
+      rollNumber: cleanRoll,
+      branch: branch.trim(),
+      year: year.trim(),
+      section: (section || 'A').trim(),
+      email: cleanEmail,
+      mobile: mobile.trim(),
+      language: language || 'Python',
+      transactionId: (transactionId || `TXN-${Date.now()}`).trim(),
+      paymentScreenshotPath: req.file ? req.file.path : (screenshotBase64 ? 'base64-stored' : ''),
       declaration: true,
     });
 

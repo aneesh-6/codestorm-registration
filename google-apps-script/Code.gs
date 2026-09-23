@@ -56,10 +56,17 @@ const SHEET_NAME = "Registrations";
 const ID_PREFIX = "CODESTORM-2026-";
 
 /**
- * 5. TIMEZONE:
+ * 5. PARTICIPANT ID CONFIGURATION:
+ * Prefix used for unique participant credentials (e.g. CS26-0001).
+ */
+const PARTICIPANT_ID_PREFIX = "CS26-";
+
+/**
+ * 6. TIMEZONE:
  * Timezone for timestamp recording (e.g., 'Asia/Kolkata' for IST).
  */
 const TIMEZONE = "Asia/Kolkata";
+
 
 
 // ============================================================================
@@ -193,6 +200,13 @@ function doPost(e) {
     // 6. Generate Unique Sequential Registration ID (e.g., CODESTORM-2026-0001)
     const registrationId = generateNextRegistrationId(sheet);
 
+    // 6b. Generate Corresponding Participant ID (e.g., CS26-0001)
+    const participantId = generateParticipantId(registrationId);
+
+    // 6c. Generate Secure Temporary Password (e.g., K7mP4xQ9) & SHA-256 Hash
+    const temporaryPassword = generateTemporaryPassword(8);
+    const passwordHash = hashPassword(temporaryPassword);
+
     // 7. Store Payment Screenshot in Google Drive
     let screenshotUrl = "";
     try {
@@ -220,7 +234,7 @@ function doPost(e) {
       const blob = Utilities.newBlob(decodedBytes, mimeType, fileName);
       const driveFile = folder.createFile(blob);
       driveFile.setDescription(
-        `CODESTORM 2026 Payment Screenshot\nRegistration ID: ${registrationId}\nParticipant: ${name}\nRoll: ${rollNumber}\nEmail: ${email}\nMobile: ${mobile}\nTransaction ID: ${data.transactionId || 'N/A'}`
+        `CODESTORM 2026 Payment Screenshot\nRegistration ID: ${registrationId}\nParticipant ID: ${participantId}\nParticipant: ${name}\nRoll: ${rollNumber}\nEmail: ${email}\nMobile: ${mobile}\nTransaction ID: ${data.transactionId || 'N/A'}`
       );
 
       // Make the file accessible to anyone with the link (viewer) so organizers can open it directly
@@ -249,7 +263,7 @@ function doPost(e) {
 
     // 10. Append Registration Row to Google Sheet
     // Columns strictly:
-    // [ Timestamp | Name | Roll Number | Email | Mobile Number | Year | Branch | Section | Payment Screenshot | Registration ID ]
+    // [ Timestamp | Name | Roll Number | Email | Mobile Number | Year | Branch | Section | Payment Screenshot | Registration ID | Participant ID | Password Hash ]
     const newRow = [
       formattedTimestamp,
       name,
@@ -260,14 +274,16 @@ function doPost(e) {
       branch,
       section,
       screenshotFormula,
-      registrationId
+      registrationId,
+      participantId,
+      passwordHash
     ];
 
     sheet.appendRow(newRow);
 
     // Apply alignment to the newly added row
     const targetRowIndex = sheet.getLastRow();
-    const newRange = sheet.getRange(targetRowIndex, 1, 1, 10);
+    const newRange = sheet.getRange(targetRowIndex, 1, 1, 12);
     newRange.setVerticalAlignment("middle");
 
     // Left-align text columns, center ID, timestamp, and screenshot link
@@ -279,11 +295,15 @@ function doPost(e) {
     sheet.getRange(targetRowIndex, 8).setHorizontalAlignment("center");  // Section
     sheet.getRange(targetRowIndex, 9).setHorizontalAlignment("center");  // Screenshot Link
     sheet.getRange(targetRowIndex, 10).setHorizontalAlignment("center"); // Registration ID
+    sheet.getRange(targetRowIndex, 11).setHorizontalAlignment("center"); // Participant ID
+    sheet.getRange(targetRowIndex, 12).setHorizontalAlignment("center"); // Password Hash
 
-    // 11. Return JSON Success Response
+    // 11. Return JSON Success Response with credentials
     return createJsonResponse({
       success: true,
       registrationId: registrationId,
+      participantId: participantId,
+      temporaryPassword: temporaryPassword,
       message: "Registration successful"
     });
 
@@ -319,7 +339,7 @@ function doGet(e) {
 
 /**
  * Generates the next sequential Registration ID (e.g. CODESTORM-2026-0001).
- * Scans existing IDs in Column 8 (Registration ID) to guarantee monotonic increments.
+ * Scans existing IDs in Column 10 (Registration ID) to guarantee monotonic increments.
  */
 function generateNextRegistrationId(sheet) {
   const lastRow = sheet.getLastRow();
@@ -346,6 +366,64 @@ function generateNextRegistrationId(sheet) {
 }
 
 /**
+ * Generates the Participant ID (e.g. CS26-0001) matching the registration sequence.
+ */
+function generateParticipantId(registrationId) {
+  if (registrationId && registrationId.startsWith(ID_PREFIX)) {
+    const numPart = registrationId.substring(ID_PREFIX.length);
+    return PARTICIPANT_ID_PREFIX + numPart;
+  }
+  return PARTICIPANT_ID_PREFIX + "0001";
+}
+
+/**
+ * Generates a secure, unpredictable 8-character temporary password (e.g. K7mP4xQ9)
+ * containing uppercase, lowercase, and numeric characters.
+ */
+function generateTemporaryPassword(length) {
+  length = length || 8;
+  const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+  const lower = "abcdefghjkmnpqrstuvwxyz";
+  const numbers = "23456789";
+  const all = upper + lower + numbers;
+
+  let pwd = "";
+  pwd += upper.charAt(Math.floor(Math.random() * upper.length));
+  pwd += lower.charAt(Math.floor(Math.random() * lower.length));
+  pwd += numbers.charAt(Math.floor(Math.random() * numbers.length));
+
+  for (let i = 3; i < length; i++) {
+    pwd += all.charAt(Math.floor(Math.random() * all.length));
+  }
+
+  const arr = pwd.split("");
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const temp = arr[i];
+    arr[i] = arr[j];
+    arr[j] = temp;
+  }
+  return arr.join("");
+}
+
+/**
+ * Securely hashes the password with SHA-256 for sheet storage.
+ * Plaintext passwords are NEVER stored in the sheet.
+ */
+function hashPassword(password) {
+  const digest = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, password, Utilities.Charset.UTF_8);
+  let hexString = "";
+  for (let i = 0; i < digest.length; i++) {
+    let byteVal = digest[i];
+    if (byteVal < 0) byteVal += 256;
+    let byteHex = byteVal.toString(16);
+    if (byteHex.length === 1) byteHex = "0" + byteHex;
+    hexString += byteHex;
+  }
+  return hexString;
+}
+
+/**
  * Initializes and formats the Google Sheet header row and styling.
  */
 function initSheetFormatting(sheet) {
@@ -359,7 +437,9 @@ function initSheetFormatting(sheet) {
     "Branch",
     "Section",
     "Payment Screenshot",
-    "Registration ID"
+    "Registration ID",
+    "Participant ID",
+    "Password Hash"
   ];
 
   if (sheet.getLastRow() === 0) {
@@ -391,6 +471,8 @@ function initSheetFormatting(sheet) {
   sheet.setColumnWidth(8,  100); // Section
   sheet.setColumnWidth(9,  180); // Payment Screenshot
   sheet.setColumnWidth(10, 200); // Registration ID
+  sheet.setColumnWidth(11, 160); // Participant ID
+  sheet.setColumnWidth(12, 240); // Password Hash
 
   // Enable filter if not already enabled
   try {

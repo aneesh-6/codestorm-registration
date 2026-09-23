@@ -15,7 +15,7 @@ const registrationSchema = new mongoose.Schema(
     },
     college: {
       type: String,
-      required: [true, 'College name is required'],
+      default: 'Malla Reddy Engineering College and Management Sciences',
       trim: true,
     },
     rollNumber: {
@@ -27,12 +27,15 @@ const registrationSchema = new mongoose.Schema(
     branch: {
       type: String,
       required: [true, 'Branch is required'],
-      enum: ['CSE', 'CSE – Data Science', 'CSE – AI & ML', 'IT', 'ECE', 'EEE', 'Mechanical', 'Civil', 'Other'],
     },
     year: {
       type: String,
       required: [true, 'Year is required'],
-      enum: ['1st Year', '2nd Year', '3rd Year', '4th Year'],
+    },
+    section: {
+      type: String,
+      default: 'A',
+      trim: true,
     },
     email: {
       type: String,
@@ -45,30 +48,22 @@ const registrationSchema = new mongoose.Schema(
     mobile: {
       type: String,
       required: [true, 'Mobile number is required'],
-      match: [/^[6-9]\d{9}$/, 'Invalid 10-digit Indian mobile number'],
     },
     language: {
       type: String,
-      required: [true, 'Programming language is required'],
-      enum: ['C', 'C++', 'Java', 'Python'],
+      default: 'Python',
     },
     transactionId: {
       type: String,
-      required: [true, 'Transaction ID is required'],
       trim: true,
-      unique: true,
     },
     paymentScreenshotPath: {
       type: String,
-      required: [true, 'Payment screenshot is required'],
+      default: '',
     },
     declaration: {
       type: Boolean,
-      required: true,
-      validate: {
-        validator: (v) => v === true,
-        message: 'Declaration must be confirmed',
-      },
+      default: true,
     },
     participantId: {
       type: String,

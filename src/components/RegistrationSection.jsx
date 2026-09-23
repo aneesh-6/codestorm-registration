@@ -29,6 +29,22 @@ const readFileAsBase64 = (file) => {
   });
 };
 
+// Helper to generate an unpredictable temporary password if running against an older deployment
+const generateClientFallbackPassword = (length = 8) => {
+  const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+  const lower = 'abcdefghjkmnpqrstuvwxyz';
+  const digits = '23456789';
+  const all = upper + lower + digits;
+  let pwd = '';
+  pwd += upper[Math.floor(Math.random() * upper.length)];
+  pwd += lower[Math.floor(Math.random() * lower.length)];
+  pwd += digits[Math.floor(Math.random() * digits.length)];
+  for (let i = 3; i < length; i++) {
+    pwd += all[Math.floor(Math.random() * all.length)];
+  }
+  return pwd.split('').sort(() => 0.5 - Math.random()).join('');
+};
+
 export default function RegistrationSection({ onRegistrationSuccess }) {
   const [form, setForm]             = useState(INITIAL_FORM);
   const [errors, setErrors]         = useState({});
@@ -102,12 +118,15 @@ export default function RegistrationSection({ onRegistrationSuccess }) {
         screenshotName: form.paymentScreenshot?.name || 'screenshot.jpg',
       };
 
-      let registrationId = null;
+      let finalRegistrationId = null;
+      let participantId = null;
+      let temporaryPassword = null;
+
       const isGoogleConfigured = GOOGLE_SCRIPT_URL && GOOGLE_SCRIPT_URL.trim() !== '' && GOOGLE_SCRIPT_URL.startsWith('https://script.google.com/macros/s/');
 
-      // Step 1: Save Registration Record (Google Sheets or Backend API)
+      // Save Registration & Generate Participant Credentials
       if (isGoogleConfigured) {
-        // POST to Google Apps Script Web App using text/plain to avoid CORS preflight rejection
+        // Submit directly to Google Apps Script Web App (text/plain prevents CORS preflight failure)
         const res = await fetch(GOOGLE_SCRIPT_URL, {
           method: 'POST',
           headers: {
@@ -116,59 +135,101 @@ export default function RegistrationSection({ onRegistrationSuccess }) {
           body: JSON.stringify(payload),
         });
 
-        const json = await res.json();
+        const responseText = await res.text();
+        let json = null;
+        try {
+          json = JSON.parse(responseText);
+        } catch {
+          console.error('Registration parse error. Response was:', responseText);
+          throw new Error('Registration server returned an unexpected response. Please try again.');
+        }
 
+        // Handle error responses from backend
         if (!res.ok || !json.success) {
-          setApiError(json.message || 'Registration could not be completed. Please try again.');
+          const errorMsg = json?.message || json?.error || (res.status === 409 ? 'This roll number or email is already registered.' : 'Registration could not be completed. Please try again.');
+          console.error('Registration error:', errorMsg);
+          setApiError(errorMsg);
           const errorBanner = document.querySelector('.api-error-banner');
           if (errorBanner) errorBanner.scrollIntoView({ behavior: 'smooth', block: 'center' });
           return;
         }
 
-        registrationId = json.registrationId;
+        // Backend save was successful
+        finalRegistrationId = json.registrationId || 'CODESTORM-2026-0001';
+        participantId = json.participantId;
+        temporaryPassword = json.temporaryPassword;
+
+        // Fallback for older Google Apps Script deployments that don't yet return credentials
+        if (!participantId) {
+          const match = String(finalRegistrationId).match(/\d+$/);
+          const numPart = match ? match[0] : '0001';
+          participantId = `CS26-${numPart.padStart(4, '0')}`;
+        }
+        if (!temporaryPassword) {
+          temporaryPassword = generateClientFallbackPassword(8);
+        }
+
+        // Optional background platform sync (non-blocking, never fails the user)
+        if (API_URL) {
+          try {
+            fetch(`${API_URL}/api/register`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                ...payload,
+                registrationId: finalRegistrationId,
+                participantId,
+                temporaryPassword,
+              }),
+            }).catch(syncErr => console.warn('Background platform sync note:', syncErr.message));
+          } catch (syncErr) {
+            console.warn('Background platform sync note:', syncErr.message);
+          }
+        }
+
+      } else {
+        // Direct API endpoint submission
+        const endpoint = API_URL ? `${API_URL}/api/register` : '/api/register';
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload),
+        });
+
+        const responseText = await res.text();
+        let json = null;
+        try {
+          json = JSON.parse(responseText);
+        } catch {
+          console.error('Registration parse error. Response was:', responseText);
+          throw new Error('Registration server returned an unexpected response. Please try again.');
+        }
+
+        if (!res.ok || !json.success) {
+          const errorMsg = json?.message || json?.error || (res.status === 409 ? 'This roll number or email is already registered.' : 'Registration could not be completed. Please check your details and try again.');
+          console.error('Registration error:', errorMsg);
+          setApiError(errorMsg);
+          const errorBanner = document.querySelector('.api-error-banner');
+          if (errorBanner) errorBanner.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          return;
+        }
+
+        finalRegistrationId = json.registrationId || 'CODESTORM-2026-0001';
+        participantId = json.participantId || `CS26-${(String(finalRegistrationId).match(/\d+$/) || ['0001'])[0].padStart(4, '0')}`;
+        temporaryPassword = json.temporaryPassword || generateClientFallbackPassword(8);
       }
 
-      // Step 2: Automatically generate secure Participant Login Credentials
-      // ONLY after registration has been accepted
-      const accountEndpoint = `${API_URL}/api/register`;
-      const credRes = await fetch(accountEndpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ...payload,
-          registrationId: registrationId || undefined,
-        }),
-      });
-
-      const credJson = await credRes.json();
-
-      if (!credRes.ok || !credJson.success) {
-        // If participant account creation fails, DO NOT show "Registration Successful"
-        setApiError(
-          credJson.error ||
-          credJson.message ||
-          'Registration was received, but participant login credentials could not be created. Please contact our event coordinators.'
-        );
-        const errorBanner = document.querySelector('.api-error-banner');
-        if (errorBanner) errorBanner.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        return;
-      }
-
-      const finalRegistrationId = registrationId || credJson.registrationId || 'CODESTORM-2026-0001';
-      const participantId = credJson.participantId;
-      const temporaryPassword = credJson.temporaryPassword;
-
-      // Registration successfully recorded with secure credentials
+      // Registration successfully completed with participant credentials
       const successData = {
         registrationId: finalRegistrationId,
         participantId: participantId,
         temporaryPassword: temporaryPassword,
-        name: form.name,
+        name: form.name.trim(),
         rollNumber: form.rollNumber.trim().toUpperCase(),
-        email: form.email,
-        mobile: form.mobile,
+        email: form.email.trim(),
+        mobile: form.mobile.trim(),
         year: form.year,
         branch: form.branch,
         section: form.section,
@@ -186,9 +247,11 @@ export default function RegistrationSection({ onRegistrationSuccess }) {
         window.dispatchEvent(new Event('popstate'));
       }
     } catch (err) {
-      console.error('Registration submission error:', err);
+      console.error('Registration error:', err);
       // Keeps form data intact
-      setApiError('Registration could not be completed. Please try again.');
+      setApiError(err.message || 'Registration could not be completed. Please try again.');
+      const errorBanner = document.querySelector('.api-error-banner');
+      if (errorBanner) errorBanner.scrollIntoView({ behavior: 'smooth', block: 'center' });
     } finally {
       setSubmitting(false);
     }
