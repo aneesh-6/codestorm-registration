@@ -5,8 +5,6 @@ import './SuccessScreen.css';
 export default function SuccessScreen({ data, onBack }) {
   const {
     registrationId,
-    participantId,
-    temporaryPassword,
     name,
     rollNumber,
     year,

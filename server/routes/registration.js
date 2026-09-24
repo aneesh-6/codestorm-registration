@@ -5,8 +5,6 @@ const User = require('../models/User');
 const upload   = require('../middleware/upload');
 const {
   generateUniqueRegistrationId,
-  generateUniqueParticipantId,
-  generateTemporaryPassword,
 } = require('../utils/generateId');
 const { writeCredentialsToGoogleSheet } = require('../utils/googleSheetsSync');
 
@@ -43,8 +41,6 @@ router.post('/register', handleUpload, async (req, res) => {
       name, college, rollNumber, branch, year, section,
       email, mobile, language, transactionId, declaration,
       registrationId: providedRegId,
-      participantId: providedPartId,
-      temporaryPassword: providedTempPassword,
       screenshotBase64,
     } = req.body;
 
