@@ -147,6 +147,14 @@ export default async function handler(req, res) {
         timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
       });
 
+      // Step 1: Safe debug logging
+      console.log('[STEP 1 api/register.js DEBUG]', {
+        registrationId,
+        participantId,
+        googleSheetsResult: sheetResult ? (sheetResult.success ? 'SUCCESS' : (sheetResult.error || 'FAILED')) : 'UNKNOWN',
+        success: sheetResult ? sheetResult.success : false,
+      });
+
       if (sheetResult && sheetResult.success === false) {
         const errorDetail = sheetResult.error || sheetResult.note || 'Unable to write participant credentials to Google Sheet.';
         console.error('Google Sheets credential column update failed:', errorDetail);

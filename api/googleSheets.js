@@ -425,7 +425,18 @@ export async function writeCredentialsToGoogleSheet(registrationData) {
       });
 
       const json = await res.json().catch(() => null);
-      if (res.ok && json?.success) {
+      const isSuccess = Boolean(res.ok && json?.success);
+
+      // Step 2: Safe debug logging
+      console.log('[STEP 2 api/googleSheets.js DEBUG]', {
+        providerUsed: 'Google Apps Script',
+        endpointUsed: scriptUrl.replace(/\/s\/[a-zA-Z0-9_-]+\//, '/s/[DEPLOYMENT_ID]/'),
+        registrationId: registrationData.registrationId,
+        participantId: registrationData.participantId,
+        resultStatus: isSuccess ? 'SUCCESS' : 'FAILED',
+      });
+
+      if (isSuccess) {
         console.log(`[Google Sheets Apps Script] registrationId=${registrationData.registrationId}, participantId=${registrationData.participantId}, sheet=Registrations, targetRow=${json.row || json.action || 'appended'}, status=SUCCESS`);
         return { success: true, via: 'appsScript', ...json };
       } else {
