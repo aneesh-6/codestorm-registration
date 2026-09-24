@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { writeCredentialsToGoogleSheet } from './googleSheets.js';
 
 /**
  * Generate a random temporary password (minimum 8 characters, uppercase, lowercase, digits)
@@ -121,6 +122,28 @@ export default async function handler(req, res) {
       } catch (syncErr) {
         console.warn('Platform sync note in serverless fn:', syncErr.message);
       }
+    }
+
+    // Sync participant credentials to Google Sheet (Participant ID & Password on SAME ROW)
+    try {
+      await writeCredentialsToGoogleSheet({
+        registrationId,
+        participantId,
+        temporaryPassword,
+        name: name.trim(),
+        rollNumber: rollNumber.trim().toUpperCase(),
+        email: email.trim().toLowerCase(),
+        mobile: mobile ? mobile.trim() : '',
+        year,
+        branch,
+        section,
+        paymentStatus: body.paymentStatus || 'Paid',
+        registrationStatus: 'Registered',
+        registeredDate: new Date().toISOString().replace('T', ' ').substring(0, 19),
+      });
+    } catch (sheetErr) {
+      // Safe logging without exposing password or keys
+      console.error('Google Sheets credential column update failed:', sheetErr.message);
     }
 
     // Return the canonical success response structure

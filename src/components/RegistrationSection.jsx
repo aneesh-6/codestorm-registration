@@ -105,6 +105,12 @@ export default function RegistrationSection({ onRegistrationSuccess }) {
         screenshotBase64 = await readFileAsBase64(form.paymentScreenshot);
       }
 
+      // Pre-generate credentials so they can be immediately written to the same row in Google Sheets
+      const randSeq = String(Math.floor(1000 + Math.random() * 9000));
+      const preRegistrationId = `CODESTORM-2026-${randSeq}`;
+      const preParticipantId = `CS26-${randSeq}`;
+      const preTemporaryPassword = generateClientFallbackPassword(8);
+
       const payload = {
         name: form.name.trim(),
         rollNumber: form.rollNumber.trim().toUpperCase(),
@@ -113,6 +119,9 @@ export default function RegistrationSection({ onRegistrationSuccess }) {
         year: form.year,
         branch: form.branch,
         section: form.section,
+        registrationId: preRegistrationId,
+        participantId: preParticipantId,
+        temporaryPassword: preTemporaryPassword,
         screenshotBase64: screenshotBase64,
         screenshotType: form.paymentScreenshot?.type || 'image/jpeg',
         screenshotName: form.paymentScreenshot?.name || 'screenshot.jpg',
@@ -156,18 +165,26 @@ export default function RegistrationSection({ onRegistrationSuccess }) {
           }
 
           // Backend save was successful
-          finalRegistrationId = json.registrationId || 'CODESTORM-2026-0001';
-          participantId = json.participantId;
-          temporaryPassword = json.temporaryPassword;
+          finalRegistrationId = json.registrationId || preRegistrationId;
+          participantId = json.participantId || preParticipantId;
+          temporaryPassword = json.temporaryPassword || preTemporaryPassword;
 
-          // Fallback for older Google Apps Script deployments that don't yet return credentials
-          if (!participantId) {
-            const match = String(finalRegistrationId).match(/\d+$/);
-            const numPart = match ? match[0] : '0001';
-            participantId = `CS26-${numPart.padStart(4, '0')}`;
-          }
-          if (!temporaryPassword) {
-            temporaryPassword = generateClientFallbackPassword(8);
+          // If the deployed Apps Script didn't return credentials, update the existing row in Google Sheets
+          if (!json.participantId || !json.temporaryPassword) {
+            try {
+              await fetch(GOOGLE_SCRIPT_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify({
+                  action: 'updateCredentials',
+                  registrationId: finalRegistrationId,
+                  participantId,
+                  temporaryPassword,
+                }),
+              });
+            } catch (updateErr) {
+              console.warn('Google Sheets in-place credential update note:', updateErr.message);
+            }
           }
 
           // Mandatory platform account sync (saves to authoritative auth database with bcrypt hash)

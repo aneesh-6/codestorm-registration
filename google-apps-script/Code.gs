@@ -8,11 +8,13 @@
  *
  * It handles:
  * 1. Concurrency-safe submission handling via LockService
- * 2. Duplicate checking for Roll Number and Email
- * 3. Decoding and saving payment screenshots directly to Google Drive
- * 4. Automatic sequential Registration ID generation (CODESTORM-2026-0001)
- * 5. Appending new records to Google Sheets with clickable Drive links
- * 6. Returning JSON responses with CORS headers
+ * 2. Duplicate checking for Roll Number, Email, and Registration ID
+ * 3. Dynamic header detection and mapping (never hardcoded column positions)
+ * 4. Automatic header column creation for Participant ID and Password if missing
+ * 5. In-place credential updates on existing rows (preventing duplicate rows)
+ * 6. Writing Participant ID and Password to the SAME ROW as the participant's registration
+ * 7. Decoding and saving payment screenshots directly to Google Drive
+ * 8. Returning credentials atomically to the caller
  */
 
 // ============================================================================
@@ -21,52 +23,55 @@
 
 /**
  * 1. GOOGLE SPREADSHEET ID:
- * Open your Google Sheet in your web browser.
- * Look at the browser address bar. The URL looks like:
- * https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit
- *
- * Copy the long string between "/d/" and "/edit".
- * Paste it inside the quotes below:
+ * Paste the spreadsheet ID from your browser URL:
  */
 const SPREADSHEET_ID = "YOUR_GOOGLE_SHEET_ID";
 
 /**
  * 2. GOOGLE DRIVE FOLDER ID:
- * Open Google Drive, create or open the folder where payment screenshots will be saved.
- * Look at the browser address bar. The URL looks like:
- * https://drive.google.com/drive/folders/1a2b3c4d5e6f7g8h9i0jklmnopqrstuv
- *
- * Copy the string after "/folders/".
- * Paste it inside the quotes below:
+ * Paste the folder ID from your Google Drive URL:
  */
 const DRIVE_FOLDER_ID = "YOUR_GOOGLE_DRIVE_FOLDER_ID";
 
 /**
  * 3. SHEET / TAB NAME:
  * The tab inside your spreadsheet where registrations will be stored.
- * Default is "Registrations". If your sheet tab is "Sheet1", you can rename it
- * to "Registrations" or update this constant.
  */
 const SHEET_NAME = "Registrations";
 
 /**
  * 4. REGISTRATION ID CONFIGURATION:
- * Prefix used for unique registration IDs.
  */
 const ID_PREFIX = "CODESTORM-2026-";
 
 /**
  * 5. PARTICIPANT ID CONFIGURATION:
- * Prefix used for unique participant credentials (e.g. CS26-0001).
  */
 const PARTICIPANT_ID_PREFIX = "CS26-";
 
 /**
  * 6. TIMEZONE:
- * Timezone for timestamp recording (e.g., 'Asia/Kolkata' for IST).
  */
 const TIMEZONE = "Asia/Kolkata";
 
+/**
+ * 7. REQUIRED SHEET COLUMNS (Canonical specification)
+ */
+const REQUIRED_HEADERS = [
+  "Registration ID",
+  "Participant ID",
+  "Password",
+  "Name",
+  "Roll Number",
+  "Email",
+  "Mobile Number",
+  "Year",
+  "Branch",
+  "Section",
+  "Payment Status",
+  "Registration Status",
+  "Registered Date"
+];
 
 
 // ============================================================================
@@ -75,15 +80,11 @@ const TIMEZONE = "Asia/Kolkata";
 
 /**
  * Handles incoming POST requests from the website registration form.
- * Note: Clients should send JSON string in request body with 'Content-Type: text/plain'
- * to avoid browser CORS preflight (OPTIONS) limitations with Apps Script.
  */
 function doPost(e) {
-  // Concurrency Lock: Prevents race conditions when multiple users submit at once
   const lock = LockService.getScriptLock();
 
   try {
-    // Wait up to 30 seconds to acquire exclusive execution lock
     const hasLock = lock.tryLock(30000);
     if (!hasLock) {
       return createJsonResponse({
@@ -97,13 +98,6 @@ function doPost(e) {
       return createJsonResponse({
         success: false,
         message: "Backend Error: SPREADSHEET_ID is not configured in Google Apps Script."
-      });
-    }
-
-    if (!DRIVE_FOLDER_ID || DRIVE_FOLDER_ID === "YOUR_GOOGLE_DRIVE_FOLDER_ID") {
-      return createJsonResponse({
-        success: false,
-        message: "Backend Error: DRIVE_FOLDER_ID is not configured in Google Apps Script."
       });
     }
 
@@ -124,7 +118,49 @@ function doPost(e) {
       });
     }
 
-    // 3. Backend Validation of Required Fields
+    // 3. Open Spreadsheet and Sheet Tab
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    let sheet = ss.getSheetByName(SHEET_NAME);
+    if (!sheet) {
+      const allSheets = ss.getSheets();
+      if (allSheets.length > 0 && (allSheets[0].getName() === "Sheet1" || allSheets[0].getLastRow() === 0)) {
+        sheet = allSheets[0];
+        sheet.setName(SHEET_NAME);
+      } else {
+        sheet = ss.insertSheet(SHEET_NAME);
+      }
+      initSheetFormatting(sheet);
+    }
+
+    // 4. Dynamic Column Mapping and Auto-Header Correction
+    const { headers, colMap } = getHeaderMapping(sheet);
+
+    // 5. Check for Dedicated Credential Update Action
+    if (data.action === "updateCredentials" && data.registrationId) {
+      const regId = String(data.registrationId).trim().toUpperCase();
+      const existingRow = findRowByRegistrationId(sheet, regId, colMap.registrationId);
+
+      if (existingRow !== -1) {
+        if (data.participantId && colMap.participantId) {
+          sheet.getRange(existingRow, colMap.participantId).setValue(String(data.participantId).trim());
+          sheet.getRange(existingRow, colMap.participantId).setHorizontalAlignment("center");
+        }
+        if (data.temporaryPassword && colMap.password) {
+          sheet.getRange(existingRow, colMap.password).setValue(String(data.temporaryPassword).trim());
+          sheet.getRange(existingRow, colMap.password).setHorizontalAlignment("center");
+        }
+        return createJsonResponse({
+          success: true,
+          action: "updated",
+          registrationId: regId,
+          participantId: data.participantId || "",
+          temporaryPassword: data.temporaryPassword || "",
+          message: "Participant credentials updated successfully in existing row."
+        });
+      }
+    }
+
+    // 6. Backend Validation of Registration Fields
     const name          = (data.name || "").trim();
     const rollNumber    = (data.rollNumber || "").trim().toUpperCase();
     const email         = (data.email || "").trim().toLowerCase();
@@ -143,186 +179,188 @@ function doPost(e) {
     if (!email || !email.includes("@")) {
       return createJsonResponse({ success: false, message: "A valid Email address is required." });
     }
-    if (!mobile) {
-      return createJsonResponse({ success: false, message: "Mobile Number is required." });
-    }
-    if (!year) {
-      return createJsonResponse({ success: false, message: "Year is required." });
-    }
-    if (!branch) {
-      return createJsonResponse({ success: false, message: "Branch is required." });
-    }
-    if (!section) {
-      return createJsonResponse({ success: false, message: "Section is required." });
-    }
-    if (!screenshotB64) {
-      return createJsonResponse({ success: false, message: "Payment Screenshot is required." });
-    }
 
-    // 4. Access Sheet and Ensure Setup
-    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    let sheet = ss.getSheetByName(SHEET_NAME);
-    if (!sheet) {
-      const allSheets = ss.getSheets();
-      if (allSheets.length > 0 && (allSheets[0].getName() === "Sheet1" || allSheets[0].getLastRow() === 0)) {
-        sheet = allSheets[0];
-        sheet.setName(SHEET_NAME);
-      } else {
-        sheet = ss.insertSheet(SHEET_NAME);
-      }
-      initSheetFormatting(sheet);
-    }
+    // 7. Duplicate Check & In-Place Row Update Protection
+    // If registrationId is provided, check if that row already exists
+    if (data.registrationId) {
+      const providedRegId = String(data.registrationId).trim().toUpperCase();
+      const existingRowById = findRowByRegistrationId(sheet, providedRegId, colMap.registrationId);
 
-    // Ensure headers exist
-    if (sheet.getLastRow() === 0) {
-      initSheetFormatting(sheet);
-    }
+      if (existingRowById !== -1) {
+        // Update credentials on SAME ROW instead of appending duplicate
+        const pId = data.participantId || generateParticipantId(providedRegId);
+        const pPwd = data.temporaryPassword || generateTemporaryPassword(8);
 
-    // 5. Duplicate Submission Protection (Check Roll Number & Email)
-    const lastRow = sheet.getLastRow();
-    if (lastRow > 1) {
-      const headers = sheet.getRange(1, 1, 1, Math.max(1, sheet.getLastColumn())).getValues()[0];
-      let rollCol = headers.indexOf("Roll Number") + 1;
-      let emailCol = headers.indexOf("Email") + 1;
-      if (rollCol === 0) rollCol = 5;
-      if (emailCol === 0) emailCol = 6;
-
-      const rollData = sheet.getRange(2, rollCol, lastRow - 1, 1).getValues();
-      const emailData = sheet.getRange(2, emailCol, lastRow - 1, 1).getValues();
-
-      for (let i = 0; i < rollData.length; i++) {
-        const existingRoll  = String(rollData[i][0]).trim().toUpperCase();
-        const existingEmail = String(emailData[i][0]).trim().toLowerCase();
-
-        if (existingRoll === rollNumber || existingEmail === email) {
-          return createJsonResponse({
-            success: false,
-            message: "This roll number or email is already registered for CODESTORM."
-          });
+        if (colMap.participantId) {
+          sheet.getRange(existingRowById, colMap.participantId).setValue(pId);
+          sheet.getRange(existingRowById, colMap.participantId).setHorizontalAlignment("center");
         }
+        if (colMap.password) {
+          sheet.getRange(existingRowById, colMap.password).setValue(pPwd);
+          sheet.getRange(existingRowById, colMap.password).setHorizontalAlignment("center");
+        }
+
+        return createJsonResponse({
+          success: true,
+          action: "updated",
+          registrationId: providedRegId,
+          participantId: pId,
+          temporaryPassword: pPwd,
+          name: name,
+          email: email,
+          message: "Registration credentials successfully updated on existing row."
+        });
       }
     }
 
-    // 6. Generate Unique Sequential Registration ID (e.g., CODESTORM-2026-0001)
-    const registrationId = generateNextRegistrationId(sheet);
+    // Check if Roll Number or Email already exists
+    const existingRowByRollOrEmail = findRowByRollOrEmail(sheet, rollNumber, email, colMap.rollNumber, colMap.email);
+    if (existingRowByRollOrEmail !== -1) {
+      // If client supplied credentials for an existing row, update it in place
+      if (data.participantId || data.temporaryPassword) {
+        const existingRegId = colMap.registrationId ? String(sheet.getRange(existingRowByRollOrEmail, colMap.registrationId).getValue()).trim() : "";
+        const pId = data.participantId || generateParticipantId(existingRegId || "CODESTORM-2026-0001");
+        const pPwd = data.temporaryPassword || generateTemporaryPassword(8);
 
-    // 6b. Generate Corresponding Participant ID (e.g., CS26-0001)
-    const participantId = generateParticipantId(registrationId);
+        if (colMap.participantId) {
+          sheet.getRange(existingRowByRollOrEmail, colMap.participantId).setValue(pId);
+          sheet.getRange(existingRowByRollOrEmail, colMap.participantId).setHorizontalAlignment("center");
+        }
+        if (colMap.password) {
+          sheet.getRange(existingRowByRollOrEmail, colMap.password).setValue(pPwd);
+          sheet.getRange(existingRowByRollOrEmail, colMap.password).setHorizontalAlignment("center");
+        }
 
-    // 6c. Generate Secure Temporary Password (e.g., K7mP4xQ9) & SHA-256 Hash
-    const temporaryPassword = generateTemporaryPassword(8);
-    const passwordHash = hashPassword(temporaryPassword);
-
-    // 7. Store Payment Screenshot in Google Drive
-    let screenshotUrl = "";
-    try {
-      const folder = DriveApp.getFolderById(DRIVE_FOLDER_ID);
-
-      // Clean base64 string (remove data:image/png;base64, prefix if present)
-      let cleanB64 = screenshotB64;
-      let mimeType = data.screenshotType || "image/jpeg";
-      if (cleanB64.indexOf(",") !== -1) {
-        const parts = cleanB64.split(",");
-        cleanB64 = parts[1];
-        const match = parts[0].match(/:(.*?);/);
-        if (match) mimeType = match[1];
+        return createJsonResponse({
+          success: true,
+          action: "updated",
+          registrationId: existingRegId,
+          participantId: pId,
+          temporaryPassword: pPwd,
+          name: name,
+          email: email,
+          message: "Existing registration credentials updated."
+        });
       }
 
-      const decodedBytes = Utilities.base64Decode(cleanB64);
-      let fileExt = "jpg";
-      if (mimeType.includes("png")) fileExt = "png";
-      else if (mimeType.includes("webp")) fileExt = "webp";
-      else if (mimeType.includes("jpeg") || mimeType.includes("jpg")) fileExt = "jpg";
-
-      const sanitizedRoll = rollNumber.replace(/[^a-zA-Z0-9]/g, "_");
-      const fileName = `PAYMENT_${registrationId}_${sanitizedRoll}.${fileExt}`;
-
-      const blob = Utilities.newBlob(decodedBytes, mimeType, fileName);
-      const driveFile = folder.createFile(blob);
-      driveFile.setDescription(
-        `CODESTORM 2026 Payment Screenshot\nRegistration ID: ${registrationId}\nParticipant ID: ${participantId}\nParticipant: ${name}\nRoll: ${rollNumber}\nEmail: ${email}\nMobile: ${mobile}\nTransaction ID: ${data.transactionId || 'N/A'}`
-      );
-
-      // Make the file accessible to anyone with the link (viewer) so organizers can open it directly
-      try {
-        driveFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-      } catch (permError) {
-        // Fallback: Drive domain policy might restrict public sharing, file will still be accessible to folder owners
-        Logger.log("Permission note: " + permError.toString());
-      }
-
-      screenshotUrl = driveFile.getUrl();
-    } catch (driveError) {
-      Logger.log("Drive upload failed: " + driveError.toString());
       return createJsonResponse({
         success: false,
-        message: "Failed to upload payment screenshot to Google Drive: " + driveError.message
+        message: "This roll number or email is already registered for CODESTORM."
       });
     }
 
-    // 8. Record Timestamp
+    // 8. Generate Unique Sequential Registration ID
+    const registrationId = data.registrationId || generateNextRegistrationId(sheet, colMap.registrationId);
+
+    // 8b. Generate Corresponding Participant ID (e.g. CS26-0001)
+    const participantId = data.participantId || generateParticipantId(registrationId);
+
+    // 8c. Generate Secure Temporary Password (e.g. K7mP4xQ9)
+    const temporaryPassword = data.temporaryPassword || generateTemporaryPassword(8);
+
+    // 9. Store Payment Screenshot in Google Drive (if folder configured and screenshot provided)
+    let screenshotUrl = "";
+    let screenshotFormula = "";
+    if (screenshotB64 && DRIVE_FOLDER_ID && DRIVE_FOLDER_ID !== "YOUR_GOOGLE_DRIVE_FOLDER_ID") {
+      try {
+        const folder = DriveApp.getFolderById(DRIVE_FOLDER_ID);
+        let cleanB64 = screenshotB64;
+        let mimeType = data.screenshotType || "image/jpeg";
+        if (cleanB64.indexOf(",") !== -1) {
+          const parts = cleanB64.split(",");
+          cleanB64 = parts[1];
+          const match = parts[0].match(/:(.*?);/);
+          if (match) mimeType = match[1];
+        }
+
+        const decodedBytes = Utilities.base64Decode(cleanB64);
+        let fileExt = "jpg";
+        if (mimeType.includes("png")) fileExt = "png";
+        else if (mimeType.includes("webp")) fileExt = "webp";
+        else if (mimeType.includes("jpeg") || mimeType.includes("jpg")) fileExt = "jpg";
+
+        const sanitizedRoll = rollNumber.replace(/[^a-zA-Z0-9]/g, "_");
+        const fileName = `PAYMENT_${registrationId}_${sanitizedRoll}.${fileExt}`;
+        const blob = Utilities.newBlob(decodedBytes, mimeType, fileName);
+        const driveFile = folder.createFile(blob);
+
+        driveFile.setDescription(
+          `CODESTORM 2026 Payment Screenshot\nRegistration ID: ${registrationId}\nParticipant ID: ${participantId}\nParticipant: ${name}\nRoll: ${rollNumber}\nEmail: ${email}\nMobile: ${mobile}`
+        );
+
+        try {
+          driveFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+        } catch (permError) {
+          Logger.log("Permission note: " + permError.toString());
+        }
+
+        screenshotUrl = driveFile.getUrl();
+        screenshotFormula = `=HYPERLINK("${screenshotUrl}", "View Screenshot")`;
+      } catch (driveErr) {
+        Logger.log("Drive upload note: " + driveErr.toString());
+      }
+    }
+
+    // 10. Record Timestamp
     const formattedTimestamp = Utilities.formatDate(new Date(), TIMEZONE, "yyyy-MM-dd HH:mm:ss");
 
-    // 9. Prepare Clickable Formula for Google Sheet
-    // Using HYPERLINK formula: =HYPERLINK("url", "View Screenshot")
-    const screenshotFormula = `=HYPERLINK("${screenshotUrl}", "View Screenshot")`;
+    // 11. Build Dynamic Row Array Mapped Strictly to Headers
+    const maxCols = Math.max(sheet.getLastColumn(), Object.values(colMap).reduce((a, b) => Math.max(a, b), 0));
+    const newRow = new Array(maxCols).fill("");
 
-    // 10. Append Registration Row to Google Sheet
-    // Standard Column Structure:
-    // [ Registration ID | Participant ID | Password | Name | Roll Number | Email | Mobile Number | Year | Branch | Section | Payment Screenshot | Registration Status | Timestamp ]
-    const newRow = [
-      registrationId,
-      participantId,
-      temporaryPassword,
-      name,
-      rollNumber,
-      email,
-      mobile,
-      year,
-      branch,
-      section,
-      screenshotFormula,
-      "Registered",
-      formattedTimestamp
-    ];
+    if (colMap.registrationId)     newRow[colMap.registrationId - 1]     = registrationId;
+    if (colMap.participantId)      newRow[colMap.participantId - 1]      = participantId;
+    if (colMap.password)           newRow[colMap.password - 1]           = temporaryPassword;
+    if (colMap.name)               newRow[colMap.name - 1]               = name;
+    if (colMap.rollNumber)         newRow[colMap.rollNumber - 1]         = rollNumber;
+    if (colMap.email)              newRow[colMap.email - 1]              = email;
+    if (colMap.mobile)             newRow[colMap.mobile - 1]             = mobile;
+    if (colMap.year)               newRow[colMap.year - 1]               = year;
+    if (colMap.branch)             newRow[colMap.branch - 1]             = branch;
+    if (colMap.section)            newRow[colMap.section - 1]            = section;
+    if (colMap.paymentStatus)      newRow[colMap.paymentStatus - 1]      = screenshotFormula || "Paid";
+    if (colMap.registrationStatus) newRow[colMap.registrationStatus - 1] = "Registered";
+    if (colMap.registeredDate)     newRow[colMap.registeredDate - 1]     = formattedTimestamp;
+    if (colMap.yearAndBranch)      newRow[colMap.yearAndBranch - 1]      = (year && branch) ? `${year} - ${branch}` : (year || branch || "");
 
+    // 12. Append Registration Row (Participant ID & Password on SAME ROW)
     sheet.appendRow(newRow);
 
-    // Apply alignment to the newly added row
     const targetRowIndex = sheet.getLastRow();
     const newRange = sheet.getRange(targetRowIndex, 1, 1, newRow.length);
     newRange.setVerticalAlignment("middle");
 
-    // Center identifiers, codes, and links
-    sheet.getRange(targetRowIndex, 1).setHorizontalAlignment("center");  // Registration ID
-    sheet.getRange(targetRowIndex, 2).setHorizontalAlignment("center");  // Participant ID
-    sheet.getRange(targetRowIndex, 3).setHorizontalAlignment("center");  // Temporary Password
-    sheet.getRange(targetRowIndex, 5).setHorizontalAlignment("center");  // Roll Number
-    sheet.getRange(targetRowIndex, 7).setHorizontalAlignment("center");  // Mobile
-    sheet.getRange(targetRowIndex, 8).setHorizontalAlignment("center");  // Year
-    sheet.getRange(targetRowIndex, 9).setHorizontalAlignment("center");  // Branch
-    sheet.getRange(targetRowIndex, 10).setHorizontalAlignment("center"); // Section
-    sheet.getRange(targetRowIndex, 11).setHorizontalAlignment("center"); // Screenshot Link
-    sheet.getRange(targetRowIndex, 12).setHorizontalAlignment("center"); // Status
-    sheet.getRange(targetRowIndex, 13).setHorizontalAlignment("center"); // Timestamp
+    // Center identifiers, credentials, codes, and statuses
+    if (colMap.registrationId)     sheet.getRange(targetRowIndex, colMap.registrationId).setHorizontalAlignment("center");
+    if (colMap.participantId)      sheet.getRange(targetRowIndex, colMap.participantId).setHorizontalAlignment("center");
+    if (colMap.password)           sheet.getRange(targetRowIndex, colMap.password).setHorizontalAlignment("center");
+    if (colMap.rollNumber)         sheet.getRange(targetRowIndex, colMap.rollNumber).setHorizontalAlignment("center");
+    if (colMap.mobile)             sheet.getRange(targetRowIndex, colMap.mobile).setHorizontalAlignment("center");
+    if (colMap.year)               sheet.getRange(targetRowIndex, colMap.year).setHorizontalAlignment("center");
+    if (colMap.branch)             sheet.getRange(targetRowIndex, colMap.branch).setHorizontalAlignment("center");
+    if (colMap.section)            sheet.getRange(targetRowIndex, colMap.section).setHorizontalAlignment("center");
+    if (colMap.paymentStatus)      sheet.getRange(targetRowIndex, colMap.paymentStatus).setHorizontalAlignment("center");
+    if (colMap.registrationStatus) sheet.getRange(targetRowIndex, colMap.registrationStatus).setHorizontalAlignment("center");
+    if (colMap.registeredDate)     sheet.getRange(targetRowIndex, colMap.registeredDate).setHorizontalAlignment("center");
 
-    // 11. Return JSON Success Response with credentials
+    // 13. Return JSON Success Response with credentials
     return createJsonResponse({
       success: true,
       registrationId: registrationId,
       participantId: participantId,
       temporaryPassword: temporaryPassword,
+      name: name,
+      email: email,
       message: "Registration successful"
     });
 
   } catch (globalError) {
-    Logger.log("Global Error in doPost: " + globalError.toString());
+    Logger.log("Google Sheets credential column update failed: " + globalError.toString());
     return createJsonResponse({
       success: false,
-      message: "Server error: " + globalError.message
+      message: "Server error processing registration: " + globalError.message
     });
   } finally {
-    // Always release lock
     lock.releaseLock();
   }
 }
@@ -342,28 +380,172 @@ function doGet(e) {
 
 
 // ============================================================================
-// HELPER FUNCTIONS
+// DYNAMIC HEADER MAPPING & ROW LOOKUP UTILITIES
 // ============================================================================
 
 /**
- * Generates the next sequential Registration ID (e.g. CODESTORM-2026-0001).
- * Scans existing IDs in Column 10 (Registration ID) to guarantee monotonic increments.
+ * Scans row 1 headers, adds any missing required columns (Participant ID, Password, etc.),
+ * and returns dynamic column index mappings.
  */
+function getHeaderMapping(sheet) {
+  let lastCol = Math.max(1, sheet.getLastColumn());
+  let headerValues = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  let headers = headerValues.map(h => String(h || "").trim());
+
+  // If sheet has zero rows or empty headers, initialize default header row
+  if (sheet.getLastRow() === 0 || (headers.length === 1 && !headers[0])) {
+    sheet.getRange(1, 1, 1, REQUIRED_HEADERS.length).setValues([REQUIRED_HEADERS]);
+    formatHeaderRow(sheet, REQUIRED_HEADERS.length);
+    lastCol = REQUIRED_HEADERS.length;
+    headers = [...REQUIRED_HEADERS];
+  }
+
+  function findCol(aliases) {
+    for (let i = 0; i < headers.length; i++) {
+      const cleanHeader = headers[i].toLowerCase().replace(/[^a-z0-9]/g, "");
+      for (let alias of aliases) {
+        if (cleanHeader === alias.toLowerCase().replace(/[^a-z0-9]/g, "")) {
+          return i + 1; // 1-based index
+        }
+      }
+    }
+    return 0;
+  }
+
+  let colMap = {
+    registrationId:     findCol(["Registration ID", "RegistrationID", "Reg ID", "RegID"]),
+    participantId:      findCol(["Participant ID", "ParticipantID", "Part ID", "Participant"]),
+    password:           findCol(["Password", "Temporary Password", "Temp Password", "Password Hash"]),
+    name:               findCol(["Name", "Full Name", "Participant Name", "Student Name"]),
+    rollNumber:         findCol(["Roll Number", "Roll No", "Roll", "Student ID", "RollNumber"]),
+    email:              findCol(["Email", "Email Address", "Email ID"]),
+    mobile:             findCol(["Mobile Number", "Mobile", "Phone Number", "Phone"]),
+    year:               findCol(["Year", "Academic Year"]),
+    branch:             findCol(["Branch", "Department"]),
+    section:            findCol(["Section", "Sec"]),
+    paymentStatus:      findCol(["Payment Status", "Payment Screenshot", "Screenshot", "Payment", "PaymentStatus"]),
+    registrationStatus: findCol(["Registration Status", "Status", "RegistrationStatus"]),
+    registeredDate:     findCol(["Registered Date", "Timestamp", "Date", "RegisteredDate", "Created At"]),
+    yearAndBranch:      findCol(["Year & Branch", "Year and Branch"]),
+  };
+
+  // If Participant ID column does not exist, add it to headers
+  if (!colMap.participantId) {
+    const newCol = sheet.getLastColumn() + 1;
+    sheet.getRange(1, newCol).setValue("Participant ID");
+    styleHeaderCell(sheet, newCol);
+    sheet.setColumnWidth(newCol, 160);
+    headers.push("Participant ID");
+    colMap.participantId = newCol;
+  }
+
+  // If Password column does not exist, add it to headers
+  if (!colMap.password) {
+    const newCol = sheet.getLastColumn() + 1;
+    sheet.getRange(1, newCol).setValue("Password");
+    styleHeaderCell(sheet, newCol);
+    sheet.setColumnWidth(newCol, 160);
+    headers.push("Password");
+    colMap.password = newCol;
+  }
+
+  // If Registration ID column does not exist, add it to headers
+  if (!colMap.registrationId) {
+    const newCol = sheet.getLastColumn() + 1;
+    sheet.getRange(1, newCol).setValue("Registration ID");
+    styleHeaderCell(sheet, newCol);
+    sheet.setColumnWidth(newCol, 200);
+    headers.push("Registration ID");
+    colMap.registrationId = newCol;
+  }
+
+  return { headers, colMap };
+}
+
+function styleHeaderCell(sheet, colIndex) {
+  const cell = sheet.getRange(1, colIndex);
+  cell.setFontWeight("bold");
+  cell.setFontColor("#FFFFFF");
+  cell.setBackground("#0f172a");
+  cell.setHorizontalAlignment("center");
+  cell.setVerticalAlignment("middle");
+}
+
+function formatHeaderRow(sheet, totalCols) {
+  sheet.setFrozenRows(1);
+  const headerRange = sheet.getRange(1, 1, 1, totalCols);
+  headerRange.setFontWeight("bold");
+  headerRange.setFontColor("#FFFFFF");
+  headerRange.setBackground("#0f172a");
+  headerRange.setHorizontalAlignment("center");
+  headerRange.setVerticalAlignment("middle");
+  sheet.setRowHeight(1, 40);
+
+  // Default widths
+  for (let c = 1; c <= totalCols; c++) {
+    sheet.setColumnWidth(c, 160);
+  }
+}
+
+/**
+ * Searches column for Registration ID and returns 1-based sheet row index.
+ */
+function findRowByRegistrationId(sheet, registrationId, regCol) {
+  if (!registrationId || !regCol) return -1;
+  const lastRow = sheet.getLastRow();
+  if (lastRow <= 1) return -1;
+
+  const target = String(registrationId).trim().toUpperCase();
+  const values = sheet.getRange(2, regCol, lastRow - 1, 1).getValues();
+
+  for (let i = 0; i < values.length; i++) {
+    if (String(values[i][0]).trim().toUpperCase() === target) {
+      return i + 2;
+    }
+  }
+  return -1;
+}
+
+/**
+ * Searches for existing Roll Number or Email.
+ */
+function findRowByRollOrEmail(sheet, rollNumber, email, rollCol, emailCol) {
+  const lastRow = sheet.getLastRow();
+  if (lastRow <= 1) return -1;
+
+  const targetRoll = rollNumber ? String(rollNumber).trim().toUpperCase() : null;
+  const targetEmail = email ? String(email).trim().toLowerCase() : null;
+
+  if (rollCol > 0 && targetRoll) {
+    const rollValues = sheet.getRange(2, rollCol, lastRow - 1, 1).getValues();
+    for (let i = 0; i < rollValues.length; i++) {
+      if (String(rollValues[i][0]).trim().toUpperCase() === targetRoll) {
+        return i + 2;
+      }
+    }
+  }
+
+  if (emailCol > 0 && targetEmail) {
+    const emailValues = sheet.getRange(2, emailCol, lastRow - 1, 1).getValues();
+    for (let i = 0; i < emailValues.length; i++) {
+      if (String(emailValues[i][0]).trim().toLowerCase() === targetEmail) {
+        return i + 2;
+      }
+    }
+  }
+
+  return -1;
+}
+
 /**
  * Generates the next sequential Registration ID (e.g. CODESTORM-2026-0001).
- * Scans existing IDs in Registration ID column to guarantee monotonic increments.
  */
-function generateNextRegistrationId(sheet) {
+function generateNextRegistrationId(sheet, regCol) {
   const lastRow = sheet.getLastRow();
   let maxNumber = 0;
 
-  if (lastRow > 1) {
-    const headers = sheet.getRange(1, 1, 1, Math.max(1, sheet.getLastColumn())).getValues()[0];
-    let regCol = headers.indexOf("Registration ID") + 1;
-    if (regCol === 0) regCol = 1; // Default to Column 1
-
+  if (lastRow > 1 && regCol > 0) {
     const idValues = sheet.getRange(2, regCol, lastRow - 1, 1).getValues();
-
     for (let i = 0; i < idValues.length; i++) {
       const val = String(idValues[i][0]).trim();
       if (val.startsWith(ID_PREFIX)) {
@@ -388,12 +570,12 @@ function generateParticipantId(registrationId) {
     const numPart = registrationId.substring(ID_PREFIX.length);
     return PARTICIPANT_ID_PREFIX + numPart;
   }
-  return PARTICIPANT_ID_PREFIX + "0001";
+  const randNum = String(Math.floor(1000 + Math.random() * 9000));
+  return PARTICIPANT_ID_PREFIX + randNum;
 }
 
 /**
- * Generates a secure, unpredictable 8-character temporary password (e.g. K7mP4xQ9)
- * containing uppercase, lowercase, and numeric characters.
+ * Generates an unpredictable 8-character temporary password containing uppercase, lowercase, and numbers.
  */
 function generateTemporaryPassword(length) {
   length = length || 8;
@@ -439,62 +621,19 @@ function hashPassword(password) {
 
 /**
  * Initializes and formats the Google Sheet header row and styling.
- * Required columns: Registration ID, Participant ID, Password, Name, Roll Number, Email, Mobile Number, Year, Branch, Section, Payment Screenshot, Registration Status, Timestamp
  */
 function initSheetFormatting(sheet) {
-  const headers = [
-    "Registration ID",
-    "Participant ID",
-    "Password",
-    "Name",
-    "Roll Number",
-    "Email",
-    "Mobile Number",
-    "Year",
-    "Branch",
-    "Section",
-    "Payment Screenshot",
-    "Registration Status",
-    "Timestamp"
-  ];
-
   if (sheet.getLastRow() === 0) {
-    sheet.appendRow(headers);
+    sheet.appendRow(REQUIRED_HEADERS);
   } else {
-    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    sheet.getRange(1, 1, 1, REQUIRED_HEADERS.length).setValues([REQUIRED_HEADERS]);
   }
+  formatHeaderRow(sheet, REQUIRED_HEADERS.length);
 
-  // Freeze top row
-  sheet.setFrozenRows(1);
-
-  // Header style
-  const headerRange = sheet.getRange(1, 1, 1, headers.length);
-  headerRange.setFontWeight("bold");
-  headerRange.setFontColor("#FFFFFF");
-  headerRange.setBackground("#0f172a"); // Dark slate / navy
-  headerRange.setHorizontalAlignment("center");
-  headerRange.setVerticalAlignment("middle");
-  sheet.setRowHeight(1, 40);
-
-  // Set individual column widths for readability
-  sheet.setColumnWidth(1,  170); // Timestamp
-  sheet.setColumnWidth(2,  220); // Name
-  sheet.setColumnWidth(3,  150); // Roll Number
-  sheet.setColumnWidth(4,  240); // Email
-  sheet.setColumnWidth(5,  140); // Mobile Number
-  sheet.setColumnWidth(6,  120); // Year
-  sheet.setColumnWidth(7,  200); // Branch
-  sheet.setColumnWidth(8,  100); // Section
-  sheet.setColumnWidth(9,  180); // Payment Screenshot
-  sheet.setColumnWidth(10, 200); // Registration ID
-  sheet.setColumnWidth(11, 160); // Participant ID
-  sheet.setColumnWidth(12, 240); // Password Hash
-
-  // Enable filter if not already enabled
   try {
     const filter = sheet.getFilter();
     if (!filter) {
-      sheet.getRange(1, 1, Math.max(sheet.getLastRow(), 2), headers.length).createFilter();
+      sheet.getRange(1, 1, Math.max(sheet.getLastRow(), 2), REQUIRED_HEADERS.length).createFilter();
     }
   } catch (err) {
     Logger.log("Filter setup notice: " + err.toString());
@@ -515,10 +654,6 @@ function createJsonResponse(obj, statusCode) {
 // ADMIN SETUP & VERIFICATION UTILITIES
 // ============================================================================
 
-/**
- * Run this function once from the Apps Script editor (select 'setupSheet' and click 'Run')
- * to automatically prepare the headers, formatting, freeze row 1, and enable filters!
- */
 function setupSheet() {
   if (!SPREADSHEET_ID || SPREADSHEET_ID === "YOUR_GOOGLE_SHEET_ID") {
     throw new Error("Please replace SPREADSHEET_ID at the top of the script first!");
@@ -527,7 +662,6 @@ function setupSheet() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   let sheet = ss.getSheetByName(SHEET_NAME);
 
-  // If a tab named 'Registrations' doesn't exist, check if there's a default 'Sheet1' and rename it
   if (!sheet) {
     const allSheets = ss.getSheets();
     if (allSheets.length > 0 && (allSheets[0].getName() === "Sheet1" || allSheets[0].getLastRow() === 0)) {
@@ -540,34 +674,4 @@ function setupSheet() {
 
   initSheetFormatting(sheet);
   Logger.log("✅ Google Sheet initialized and formatted successfully on tab: '" + sheet.getName() + "'!");
-}
-
-/**
- * Run this function from the Apps Script editor (select 'testRegistration' and click 'Run')
- * to test writing to your Google Sheet and Google Drive folder before testing from the website!
- */
-function testRegistration() {
-  Logger.log("Starting test registration...");
-
-  // Create a minimal 1x1 transparent PNG blob for testing Drive upload
-  const testBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
-
-  const mockEvent = {
-    postData: {
-      contents: JSON.stringify({
-        name: "Test Participant",
-        rollNumber: "TEST2026" + Math.floor(100 + Math.random() * 900),
-        email: "test_" + Date.now() + "@example.com",
-        mobile: "9876543210",
-        year: "3rd Year",
-        branch: "CSE \u2013 Data Science (CSD)",
-        section: "A",
-        screenshotBase64: testBase64,
-        screenshotType: "image/png"
-      })
-    }
-  };
-
-  const response = doPost(mockEvent);
-  Logger.log("Response from doPost: " + response.getContent());
 }

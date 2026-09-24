@@ -8,6 +8,7 @@ const {
   generateUniqueParticipantId,
   generateTemporaryPassword,
 } = require('../utils/generateId');
+const { writeCredentialsToGoogleSheet } = require('../utils/googleSheetsSync');
 
 let bcrypt;
 try {
@@ -123,6 +124,27 @@ router.post('/register', handleUpload, async (req, res) => {
       await user.save();
     } catch (userErr) {
       console.error('[User Creation Warning]', userErr.message);
+    }
+
+    // --- Sync credentials to Google Sheets on the same row ---
+    try {
+      await writeCredentialsToGoogleSheet({
+        registrationId: reg.registrationId,
+        participantId: reg.participantId,
+        temporaryPassword,
+        name: reg.name,
+        rollNumber: reg.rollNumber,
+        email: reg.email,
+        mobile: reg.mobile,
+        year: reg.year,
+        branch: reg.branch,
+        section: reg.section,
+        paymentStatus: 'Paid',
+        registrationStatus: 'Registered',
+        registeredDate: new Date().toISOString().replace('T', ' ').substring(0, 19),
+      });
+    } catch (sheetErr) {
+      console.error('Google Sheets credential column update failed:', sheetErr.message);
     }
 
     res.status(201).json({
