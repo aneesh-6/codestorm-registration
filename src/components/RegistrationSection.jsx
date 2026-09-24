@@ -126,53 +126,54 @@ export default function RegistrationSection({ onRegistrationSuccess }) {
 
       // Save Registration & Generate Participant Credentials
       if (isGoogleConfigured) {
-        // Submit directly to Google Apps Script Web App (text/plain prevents CORS preflight failure)
-        const res = await fetch(GOOGLE_SCRIPT_URL, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'text/plain;charset=utf-8',
-          },
-          body: JSON.stringify(payload),
-        });
-
-        const responseText = await res.text();
-        let json = null;
         try {
-          json = JSON.parse(responseText);
-        } catch {
-          console.error('Registration parse error. Response was:', responseText);
-          throw new Error('Registration server returned an unexpected response. Please try again.');
-        }
+          // Submit directly to Google Apps Script Web App (text/plain prevents CORS preflight failure)
+          const res = await fetch(GOOGLE_SCRIPT_URL, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'text/plain;charset=utf-8',
+            },
+            body: JSON.stringify(payload),
+          });
 
-        // Handle error responses from backend
-        if (!res.ok || !json.success) {
-          const errorMsg = json?.message || json?.error || (res.status === 409 ? 'This roll number or email is already registered.' : 'Registration could not be completed. Please try again.');
-          console.error('Registration error:', errorMsg);
-          setApiError(errorMsg);
-          const errorBanner = document.querySelector('.api-error-banner');
-          if (errorBanner) errorBanner.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          return;
-        }
-
-        // Backend save was successful
-        finalRegistrationId = json.registrationId || 'CODESTORM-2026-0001';
-        participantId = json.participantId;
-        temporaryPassword = json.temporaryPassword;
-
-        // Fallback for older Google Apps Script deployments that don't yet return credentials
-        if (!participantId) {
-          const match = String(finalRegistrationId).match(/\d+$/);
-          const numPart = match ? match[0] : '0001';
-          participantId = `CS26-${numPart.padStart(4, '0')}`;
-        }
-        if (!temporaryPassword) {
-          temporaryPassword = generateClientFallbackPassword(8);
-        }
-
-        // Optional background platform sync (non-blocking, never fails the user)
-        if (API_URL) {
+          const responseText = await res.text();
+          let json = null;
           try {
-            fetch(`${API_URL}/api/register`, {
+            json = JSON.parse(responseText);
+          } catch {
+            console.error('Registration parse error. Response was:', responseText);
+            throw new Error('Registration server returned an unexpected response. Please try again.');
+          }
+
+          // Handle error responses from backend
+          if (!res.ok || !json.success) {
+            const errorMsg = json?.message || json?.error || (res.status === 409 ? 'This roll number or email is already registered.' : 'Registration could not be completed. Please try again.');
+            console.error('Registration error:', errorMsg);
+            setApiError(errorMsg);
+            const errorBanner = document.querySelector('.api-error-banner');
+            if (errorBanner) errorBanner.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            return;
+          }
+
+          // Backend save was successful
+          finalRegistrationId = json.registrationId || 'CODESTORM-2026-0001';
+          participantId = json.participantId;
+          temporaryPassword = json.temporaryPassword;
+
+          // Fallback for older Google Apps Script deployments that don't yet return credentials
+          if (!participantId) {
+            const match = String(finalRegistrationId).match(/\d+$/);
+            const numPart = match ? match[0] : '0001';
+            participantId = `CS26-${numPart.padStart(4, '0')}`;
+          }
+          if (!temporaryPassword) {
+            temporaryPassword = generateClientFallbackPassword(8);
+          }
+
+          // Mandatory platform account sync (saves to authoritative auth database with bcrypt hash)
+          const platformEndpoint = API_URL ? `${API_URL}/api/register` : '/api/register';
+          try {
+            const syncRes = await fetch(platformEndpoint, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -181,14 +182,33 @@ export default function RegistrationSection({ onRegistrationSuccess }) {
                 participantId,
                 temporaryPassword,
               }),
-            }).catch(syncErr => console.warn('Background platform sync note:', syncErr.message));
+            });
+            const syncJson = await syncRes.json();
+            if (syncJson?.participantId) participantId = syncJson.participantId;
+            if (syncJson?.temporaryPassword) temporaryPassword = syncJson.temporaryPassword;
           } catch (syncErr) {
-            console.warn('Background platform sync note:', syncErr.message);
+            console.warn('Authoritative platform sync note:', syncErr.message);
           }
+        } catch (scriptErr) {
+          console.warn('Google Script direct submit encountered an issue, falling back to direct platform API:', scriptErr.message);
+          // Fall back to direct Event Platform API
+          const fallbackEndpoint = API_URL ? `${API_URL}/api/register` : '/api/register';
+          const fallbackRes = await fetch(fallbackEndpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          const fallbackJson = await fallbackRes.json();
+          if (!fallbackRes.ok || !fallbackJson.success) {
+            throw new Error(fallbackJson?.error || fallbackJson?.message || 'Registration could not be completed.');
+          }
+          finalRegistrationId = fallbackJson.registrationId || 'CODESTORM-2026-0001';
+          participantId = fallbackJson.participantId;
+          temporaryPassword = fallbackJson.temporaryPassword;
         }
 
       } else {
-        // Direct API endpoint submission
+        // Direct Event Conducting Platform API endpoint submission
         const endpoint = API_URL ? `${API_URL}/api/register` : '/api/register';
         const res = await fetch(endpoint, {
           method: 'POST',

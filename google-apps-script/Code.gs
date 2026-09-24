@@ -181,12 +181,18 @@ function doPost(e) {
     // 5. Duplicate Submission Protection (Check Roll Number & Email)
     const lastRow = sheet.getLastRow();
     if (lastRow > 1) {
-      // Columns: [1: Timestamp, 2: Name, 3: Roll Number, 4: Email, 5: Mobile, 6: Year, 7: Branch, 8: Section, 9: Screenshot, 10: Reg ID]
-      const existingData = sheet.getRange(2, 3, lastRow - 1, 2).getValues(); // Read Col 3 (Roll) & Col 4 (Email)
+      const headers = sheet.getRange(1, 1, 1, Math.max(1, sheet.getLastColumn())).getValues()[0];
+      let rollCol = headers.indexOf("Roll Number") + 1;
+      let emailCol = headers.indexOf("Email") + 1;
+      if (rollCol === 0) rollCol = 5;
+      if (emailCol === 0) emailCol = 6;
 
-      for (let i = 0; i < existingData.length; i++) {
-        const existingRoll  = String(existingData[i][0]).trim().toUpperCase();
-        const existingEmail = String(existingData[i][1]).trim().toLowerCase();
+      const rollData = sheet.getRange(2, rollCol, lastRow - 1, 1).getValues();
+      const emailData = sheet.getRange(2, emailCol, lastRow - 1, 1).getValues();
+
+      for (let i = 0; i < rollData.length; i++) {
+        const existingRoll  = String(rollData[i][0]).trim().toUpperCase();
+        const existingEmail = String(emailData[i][0]).trim().toLowerCase();
 
         if (existingRoll === rollNumber || existingEmail === email) {
           return createJsonResponse({
@@ -262,10 +268,12 @@ function doPost(e) {
     const screenshotFormula = `=HYPERLINK("${screenshotUrl}", "View Screenshot")`;
 
     // 10. Append Registration Row to Google Sheet
-    // Columns strictly:
-    // [ Timestamp | Name | Roll Number | Email | Mobile Number | Year | Branch | Section | Payment Screenshot | Registration ID | Participant ID | Password Hash ]
+    // Standard Column Structure:
+    // [ Registration ID | Participant ID | Password | Name | Roll Number | Email | Mobile Number | Year | Branch | Section | Payment Screenshot | Registration Status | Timestamp ]
     const newRow = [
-      formattedTimestamp,
+      registrationId,
+      participantId,
+      temporaryPassword,
       name,
       rollNumber,
       email,
@@ -274,29 +282,29 @@ function doPost(e) {
       branch,
       section,
       screenshotFormula,
-      registrationId,
-      participantId,
-      passwordHash
+      "Registered",
+      formattedTimestamp
     ];
 
     sheet.appendRow(newRow);
 
     // Apply alignment to the newly added row
     const targetRowIndex = sheet.getLastRow();
-    const newRange = sheet.getRange(targetRowIndex, 1, 1, 12);
+    const newRange = sheet.getRange(targetRowIndex, 1, 1, newRow.length);
     newRange.setVerticalAlignment("middle");
 
-    // Left-align text columns, center ID, timestamp, and screenshot link
-    sheet.getRange(targetRowIndex, 1).setHorizontalAlignment("center");  // Timestamp
-    sheet.getRange(targetRowIndex, 3).setHorizontalAlignment("center");  // Roll Number
-    sheet.getRange(targetRowIndex, 5).setHorizontalAlignment("center");  // Mobile
-    sheet.getRange(targetRowIndex, 6).setHorizontalAlignment("center");  // Year
-    sheet.getRange(targetRowIndex, 7).setHorizontalAlignment("center");  // Branch
-    sheet.getRange(targetRowIndex, 8).setHorizontalAlignment("center");  // Section
-    sheet.getRange(targetRowIndex, 9).setHorizontalAlignment("center");  // Screenshot Link
-    sheet.getRange(targetRowIndex, 10).setHorizontalAlignment("center"); // Registration ID
-    sheet.getRange(targetRowIndex, 11).setHorizontalAlignment("center"); // Participant ID
-    sheet.getRange(targetRowIndex, 12).setHorizontalAlignment("center"); // Password Hash
+    // Center identifiers, codes, and links
+    sheet.getRange(targetRowIndex, 1).setHorizontalAlignment("center");  // Registration ID
+    sheet.getRange(targetRowIndex, 2).setHorizontalAlignment("center");  // Participant ID
+    sheet.getRange(targetRowIndex, 3).setHorizontalAlignment("center");  // Temporary Password
+    sheet.getRange(targetRowIndex, 5).setHorizontalAlignment("center");  // Roll Number
+    sheet.getRange(targetRowIndex, 7).setHorizontalAlignment("center");  // Mobile
+    sheet.getRange(targetRowIndex, 8).setHorizontalAlignment("center");  // Year
+    sheet.getRange(targetRowIndex, 9).setHorizontalAlignment("center");  // Branch
+    sheet.getRange(targetRowIndex, 10).setHorizontalAlignment("center"); // Section
+    sheet.getRange(targetRowIndex, 11).setHorizontalAlignment("center"); // Screenshot Link
+    sheet.getRange(targetRowIndex, 12).setHorizontalAlignment("center"); // Status
+    sheet.getRange(targetRowIndex, 13).setHorizontalAlignment("center"); // Timestamp
 
     // 11. Return JSON Success Response with credentials
     return createJsonResponse({
@@ -341,13 +349,20 @@ function doGet(e) {
  * Generates the next sequential Registration ID (e.g. CODESTORM-2026-0001).
  * Scans existing IDs in Column 10 (Registration ID) to guarantee monotonic increments.
  */
+/**
+ * Generates the next sequential Registration ID (e.g. CODESTORM-2026-0001).
+ * Scans existing IDs in Registration ID column to guarantee monotonic increments.
+ */
 function generateNextRegistrationId(sheet) {
   const lastRow = sheet.getLastRow();
   let maxNumber = 0;
 
   if (lastRow > 1) {
-    // Column 10 is Registration ID
-    const idValues = sheet.getRange(2, 10, lastRow - 1, 1).getValues();
+    const headers = sheet.getRange(1, 1, 1, Math.max(1, sheet.getLastColumn())).getValues()[0];
+    let regCol = headers.indexOf("Registration ID") + 1;
+    if (regCol === 0) regCol = 1; // Default to Column 1
+
+    const idValues = sheet.getRange(2, regCol, lastRow - 1, 1).getValues();
 
     for (let i = 0; i < idValues.length; i++) {
       const val = String(idValues[i][0]).trim();
@@ -407,8 +422,7 @@ function generateTemporaryPassword(length) {
 }
 
 /**
- * Securely hashes the password with SHA-256 for sheet storage.
- * Plaintext passwords are NEVER stored in the sheet.
+ * Securely hashes the password with SHA-256 for reference storage if needed.
  */
 function hashPassword(password) {
   const digest = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, password, Utilities.Charset.UTF_8);
@@ -425,10 +439,13 @@ function hashPassword(password) {
 
 /**
  * Initializes and formats the Google Sheet header row and styling.
+ * Required columns: Registration ID, Participant ID, Password, Name, Roll Number, Email, Mobile Number, Year, Branch, Section, Payment Screenshot, Registration Status, Timestamp
  */
 function initSheetFormatting(sheet) {
   const headers = [
-    "Timestamp",
+    "Registration ID",
+    "Participant ID",
+    "Password",
     "Name",
     "Roll Number",
     "Email",
@@ -437,9 +454,8 @@ function initSheetFormatting(sheet) {
     "Branch",
     "Section",
     "Payment Screenshot",
-    "Registration ID",
-    "Participant ID",
-    "Password Hash"
+    "Registration Status",
+    "Timestamp"
   ];
 
   if (sheet.getLastRow() === 0) {

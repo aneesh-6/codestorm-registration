@@ -98,6 +98,31 @@ export default async function handler(req, res) {
     const temporaryPassword = body.temporaryPassword || generateTemporaryPassword(8);
     const passwordHash = crypto.createHash('sha256').update(temporaryPassword).digest('hex');
 
+    // Sync to authoritative event platform backend if URL is defined
+    const eventPlatformUrl = process.env.EVENT_PLATFORM_URL || process.env.VITE_EVENT_PLATFORM_URL || process.env.API_URL || 'http://localhost:5000';
+    if (eventPlatformUrl) {
+      try {
+        await fetch(`${eventPlatformUrl}/api/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: name.trim(),
+            rollNumber: rollNumber.trim().toUpperCase(),
+            email: email.trim().toLowerCase(),
+            mobile: mobile ? mobile.trim() : '',
+            year,
+            branch,
+            section,
+            registrationId,
+            participantId,
+            temporaryPassword,
+          })
+        }).catch(e => console.warn('Platform sync note in serverless fn:', e.message));
+      } catch (syncErr) {
+        console.warn('Platform sync note in serverless fn:', syncErr.message);
+      }
+    }
+
     // Return the canonical success response structure
     return res.status(200).json({
       success: true,
