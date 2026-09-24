@@ -3,86 +3,120 @@
  * CODESTORM 2026 - GOOGLE SHEETS & DRIVE REGISTRATION BACKEND
  * ============================================================================
  *
- * This Google Apps Script acts as the secure backend API for the CODESTORM
- * website registration form.
+ * Column Structure (Matching Production Google Sheet):
+ * A: Timestamp
+ * B: Name
+ * C: Roll Number
+ * D: Email
+ * E: Mobile Number
+ * F: Year & Branch
+ * G: Payment Screenshot
+ * H: Registration ID
+ * I: Participant ID
+ * J: Password
  *
- * It handles:
- * 1. Concurrency-safe submission handling via LockService
- * 2. Duplicate checking for Roll Number, Email, and Registration ID
- * 3. Dynamic header detection and mapping (never hardcoded column positions)
- * 4. Automatic header column creation for Participant ID and Password if missing
- * 5. In-place credential updates on existing rows (preventing duplicate rows)
- * 6. Writing Participant ID and Password to the SAME ROW as the participant's registration
- * 7. Decoding and saving payment screenshots directly to Google Drive
- * 8. Returning credentials atomically to the caller
+ * This Google Apps Script:
+ * 1. Checks and automatically creates columns I (Participant ID) and J (Password)
+ *    after Registration ID (H) if they do not exist.
+ * 2. Generates Participant ID (CS26-0001, CS26-0002...) and temporary password.
+ * 3. Writes Participant ID & Password into the SAME Google Sheets row.
+ * 4. Never creates duplicate rows: if Registration ID already exists, it updates
+ *    that exact row's Participant ID and Password in place.
+ * 5. Returns Registration ID, Participant ID, and temporary password to caller.
  */
 
 // ============================================================================
 // CONFIGURATION - PASTE YOUR GOOGLE SHEET & GOOGLE DRIVE FOLDER IDS HERE
 // ============================================================================
 
-/**
- * 1. GOOGLE SPREADSHEET ID:
- * Paste the spreadsheet ID from your browser URL:
- */
-const SPREADSHEET_ID = "YOUR_GOOGLE_SHEET_ID";
-
-/**
- * 2. GOOGLE DRIVE FOLDER ID:
- * Paste the folder ID from your Google Drive URL:
- */
+const SPREADSHEET_ID = "YOUR_GOOGLE_SHEET_ID"; // Leave as is if script is opened via Extensions > Apps Script in your Sheet
 const DRIVE_FOLDER_ID = "YOUR_GOOGLE_DRIVE_FOLDER_ID";
-
-/**
- * 3. SHEET / TAB NAME:
- * The tab inside your spreadsheet where registrations will be stored.
- */
 const SHEET_NAME = "Registrations";
-
-/**
- * 4. REGISTRATION ID CONFIGURATION:
- */
 const ID_PREFIX = "CODESTORM-2026-";
-
-/**
- * 5. PARTICIPANT ID CONFIGURATION:
- */
 const PARTICIPANT_ID_PREFIX = "CS26-";
-
-/**
- * 6. TIMEZONE:
- */
 const TIMEZONE = "Asia/Kolkata";
 
 /**
- * 7. REQUIRED SHEET COLUMNS (Canonical specification)
+ * Production Sheet Columns (Columns A through J):
  */
 const REQUIRED_HEADERS = [
-  "Registration ID",
-  "Participant ID",
-  "Password",
-  "Name",
-  "Roll Number",
-  "Email",
-  "Mobile Number",
-  "Year",
-  "Branch",
-  "Section",
-  "Payment Status",
-  "Registration Status",
-  "Registered Date"
+  "Timestamp",          // A (1)
+  "Name",               // B (2)
+  "Roll Number",        // C (3)
+  "Email",              // D (4)
+  "Mobile Number",      // E (5)
+  "Year & Branch",      // F (6)
+  "Payment Screenshot", // G (7)
+  "Registration ID",    // H (8)
+  "Participant ID",     // I (9)
+  "Password"            // J (10)
 ];
 
+/**
+ * Safely resolves the Google Spreadsheet whether bound to sheet or standalone
+ */
+function getSpreadsheet() {
+  if (SPREADSHEET_ID && SPREADSHEET_ID !== "YOUR_GOOGLE_SHEET_ID") {
+    try {
+      let cleanId = SPREADSHEET_ID.trim();
+      const urlMatch = cleanId.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+      if (urlMatch) cleanId = urlMatch[1];
+      return SpreadsheetApp.openById(cleanId);
+    } catch (e) {
+      Logger.log("openById note: " + e.message);
+    }
+  }
+
+  try {
+    const active = SpreadsheetApp.getActiveSpreadsheet();
+    if (active) return active;
+  } catch (e) {
+    Logger.log("getActiveSpreadsheet note: " + e.message);
+  }
+
+  throw new Error("Unable to open Google Sheet. Please specify SPREADSHEET_ID at top of script or run within the bound Sheet.");
+}
+
+function getRegistrationSheet(ss) {
+  // 1. Direct tab by configured SHEET_NAME ('Registrations')
+  let sheet = ss.getSheetByName(SHEET_NAME);
+  if (sheet) return sheet;
+
+  // 2. Search for any sheet whose first row contains 'Registration ID' or 'Roll Number'
+  const allSheets = ss.getSheets();
+  for (let i = 0; i < allSheets.length; i++) {
+    const s = allSheets[i];
+    if (s.getLastColumn() > 0) {
+      const firstRow = s.getRange(1, 1, 1, Math.min(s.getLastColumn(), 20)).getValues()[0];
+      const hasRegId = firstRow.some(val => {
+        const clean = String(val).toLowerCase().replace(/[^a-z0-9]/g, '');
+        return clean.includes('registrationid') || clean.includes('participantid') || clean.includes('rollnumber');
+      });
+      if (hasRegId) return s;
+    }
+  }
+
+  // 3. Fallback: Active sheet
+  try {
+    const active = ss.getActiveSheet();
+    if (active) return active;
+  } catch (e) {}
+
+  // 4. Fallback: First sheet if available
+  if (allSheets.length > 0) return allSheets[0];
+
+  const newSheet = ss.insertSheet(SHEET_NAME);
+  initSheetFormatting(newSheet);
+  return newSheet;
+}
 
 // ============================================================================
 // WEB APP API ENDPOINTS (doPost & doGet)
 // ============================================================================
 
-/**
- * Handles incoming POST requests from the website registration form.
- */
 function doPost(e) {
   const lock = LockService.getScriptLock();
+  let sheet;
 
   try {
     const hasLock = lock.tryLock(30000);
@@ -93,13 +127,9 @@ function doPost(e) {
       }, 429);
     }
 
-    // 1. Verify Configuration
-    if (!SPREADSHEET_ID || SPREADSHEET_ID === "YOUR_GOOGLE_SHEET_ID") {
-      return createJsonResponse({
-        success: false,
-        message: "Backend Error: SPREADSHEET_ID is not configured in Google Apps Script."
-      });
-    }
+    // 1. Open Spreadsheet and Sheet Tab dynamically
+    const ss = getSpreadsheet();
+    sheet = getRegistrationSheet(ss);
 
     // 2. Parse Request Data
     let data;
@@ -118,49 +148,52 @@ function doPost(e) {
       });
     }
 
-    // 3. Open Spreadsheet and Sheet Tab
-    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    let sheet = ss.getSheetByName(SHEET_NAME);
-    if (!sheet) {
-      const allSheets = ss.getSheets();
-      if (allSheets.length > 0 && (allSheets[0].getName() === "Sheet1" || allSheets[0].getLastRow() === 0)) {
-        sheet = allSheets[0];
-        sheet.setName(SHEET_NAME);
-      } else {
-        sheet = ss.insertSheet(SHEET_NAME);
+    // 3. Ensure Columns A..J exist and get dynamic column mappings
+    const { headers, colMap } = ensureAndMapHeaders(sheet);
+
+    // 4. Handle Dedicated Credential Update Action (In-Place Row Update)
+    if (data.action === "updateCredentials") {
+      const regId = data.registrationId ? String(data.registrationId).trim().toUpperCase() : "";
+      let existingRow = regId ? findRowByRegistrationId(sheet, regId, colMap.registrationId) : -1;
+
+      // Fallback search by Roll Number or Email if not found by Registration ID
+      if (existingRow === -1 && (data.rollNumber || data.email)) {
+        existingRow = findRowByRollOrEmail(sheet, data.rollNumber, data.email, colMap.rollNumber, colMap.email);
       }
-      initSheetFormatting(sheet);
-    }
-
-    // 4. Dynamic Column Mapping and Auto-Header Correction
-    const { headers, colMap } = getHeaderMapping(sheet);
-
-    // 5. Check for Dedicated Credential Update Action
-    if (data.action === "updateCredentials" && data.registrationId) {
-      const regId = String(data.registrationId).trim().toUpperCase();
-      const existingRow = findRowByRegistrationId(sheet, regId, colMap.registrationId);
 
       if (existingRow !== -1) {
-        if (data.participantId && colMap.participantId) {
-          sheet.getRange(existingRow, colMap.participantId).setValue(String(data.participantId).trim());
-          sheet.getRange(existingRow, colMap.participantId).setHorizontalAlignment("center");
+        const foundRegId = regId || (colMap.registrationId ? String(sheet.getRange(existingRow, colMap.registrationId).getValue()).trim() : "");
+        const pId = data.participantId || generateParticipantId(foundRegId || "CODESTORM-2026-0001");
+        const pPwd = data.temporaryPassword || generateTemporaryPassword(8);
+
+        if (colMap.participantId) {
+          sheet.getRange(existingRow, colMap.participantId).setValue(String(pId).trim()).setHorizontalAlignment("center");
         }
-        if (data.temporaryPassword && colMap.password) {
-          sheet.getRange(existingRow, colMap.password).setValue(String(data.temporaryPassword).trim());
-          sheet.getRange(existingRow, colMap.password).setHorizontalAlignment("center");
+        if (colMap.password) {
+          sheet.getRange(existingRow, colMap.password).setValue(String(pPwd).trim()).setHorizontalAlignment("center");
         }
+
+        // Server-side debug log
+        Logger.log("registrationId=" + foundRegId + ", participantId=" + pId + ", sheet=" + sheet.getName() + ", targetRow=" + existingRow + ", status=SUCCESS");
+
         return createJsonResponse({
           success: true,
           action: "updated",
-          registrationId: regId,
-          participantId: data.participantId || "",
-          temporaryPassword: data.temporaryPassword || "",
+          registrationId: foundRegId,
+          participantId: pId,
+          temporaryPassword: pPwd,
           message: "Participant credentials updated successfully in existing row."
+        });
+      } else {
+        Logger.log("registrationId=" + regId + ", participantId=" + (data.participantId || "UNKNOWN") + ", sheet=" + sheet.getName() + ", targetRow=UNKNOWN, status=FAILED, error=Row not found");
+        return createJsonResponse({
+          success: false,
+          message: "Existing registration row not found for credentials update."
         });
       }
     }
 
-    // 6. Backend Validation of Registration Fields
+    // 6. Validate Required Registration Fields
     const name          = (data.name || "").trim();
     const rollNumber    = (data.rollNumber || "").trim().toUpperCase();
     const email         = (data.email || "").trim().toLowerCase();
@@ -180,14 +213,13 @@ function doPost(e) {
       return createJsonResponse({ success: false, message: "A valid Email address is required." });
     }
 
-    // 7. Duplicate Check & In-Place Row Update Protection
-    // If registrationId is provided, check if that row already exists
+    // 7. Duplicate Check & In-Place Row Update
+    // Check if Registration ID already exists
     if (data.registrationId) {
       const providedRegId = String(data.registrationId).trim().toUpperCase();
       const existingRowById = findRowByRegistrationId(sheet, providedRegId, colMap.registrationId);
 
       if (existingRowById !== -1) {
-        // Update credentials on SAME ROW instead of appending duplicate
         const pId = data.participantId || generateParticipantId(providedRegId);
         const pPwd = data.temporaryPassword || generateTemporaryPassword(8);
 
@@ -199,6 +231,9 @@ function doPost(e) {
           sheet.getRange(existingRowById, colMap.password).setValue(pPwd);
           sheet.getRange(existingRowById, colMap.password).setHorizontalAlignment("center");
         }
+
+        // Server-side debug log
+        Logger.log("registrationId=" + providedRegId + ", participantId=" + pId + ", sheet=" + sheet.getName() + ", targetRow=" + existingRowById + ", status=SUCCESS");
 
         return createJsonResponse({
           success: true,
@@ -216,9 +251,10 @@ function doPost(e) {
     // Check if Roll Number or Email already exists
     const existingRowByRollOrEmail = findRowByRollOrEmail(sheet, rollNumber, email, colMap.rollNumber, colMap.email);
     if (existingRowByRollOrEmail !== -1) {
-      // If client supplied credentials for an existing row, update it in place
       if (data.participantId || data.temporaryPassword) {
-        const existingRegId = colMap.registrationId ? String(sheet.getRange(existingRowByRollOrEmail, colMap.registrationId).getValue()).trim() : "";
+        const existingRegId = colMap.registrationId
+          ? String(sheet.getRange(existingRowByRollOrEmail, colMap.registrationId).getValue()).trim()
+          : "";
         const pId = data.participantId || generateParticipantId(existingRegId || "CODESTORM-2026-0001");
         const pPwd = data.temporaryPassword || generateTemporaryPassword(8);
 
@@ -230,6 +266,9 @@ function doPost(e) {
           sheet.getRange(existingRowByRollOrEmail, colMap.password).setValue(pPwd);
           sheet.getRange(existingRowByRollOrEmail, colMap.password).setHorizontalAlignment("center");
         }
+
+        // Server-side debug log
+        Logger.log("registrationId=" + existingRegId + ", participantId=" + pId + ", sheet=" + sheet.getName() + ", targetRow=" + existingRowByRollOrEmail + ", status=SUCCESS");
 
         return createJsonResponse({
           success: true,
@@ -249,16 +288,12 @@ function doPost(e) {
       });
     }
 
-    // 8. Generate Unique Sequential Registration ID
+    // 8. Generate Registration ID, Participant ID, and Temporary Password BEFORE sheet write
     const registrationId = data.registrationId || generateNextRegistrationId(sheet, colMap.registrationId);
-
-    // 8b. Generate Corresponding Participant ID (e.g. CS26-0001)
     const participantId = data.participantId || generateParticipantId(registrationId);
-
-    // 8c. Generate Secure Temporary Password (e.g. K7mP4xQ9)
     const temporaryPassword = data.temporaryPassword || generateTemporaryPassword(8);
 
-    // 9. Store Payment Screenshot in Google Drive (if folder configured and screenshot provided)
+    // 9. Store Payment Screenshot in Google Drive (if folder configured and base64 provided)
     let screenshotUrl = "";
     let screenshotFormula = "";
     if (screenshotB64 && DRIVE_FOLDER_ID && DRIVE_FOLDER_ID !== "YOUR_GOOGLE_DRIVE_FOLDER_ID") {
@@ -301,27 +336,38 @@ function doPost(e) {
       }
     }
 
-    // 10. Record Timestamp
+    // 10. Record Timestamp and Academic Info
     const formattedTimestamp = Utilities.formatDate(new Date(), TIMEZONE, "yyyy-MM-dd HH:mm:ss");
+    const yearAndBranch = (year && branch)
+      ? (section ? `${year} - ${branch} (${section})` : `${year} - ${branch}`)
+      : (data.yearAndBranch || year || branch || "CSE");
 
-    // 11. Build Dynamic Row Array Mapped Strictly to Headers
-    const maxCols = Math.max(sheet.getLastColumn(), Object.values(colMap).reduce((a, b) => Math.max(a, b), 0));
+    // 11. Build Dynamic Row Array strictly matching Columns A through J
+    const maxCols = Math.max(sheet.getLastColumn(), 10);
     const newRow = new Array(maxCols).fill("");
 
-    if (colMap.registrationId)     newRow[colMap.registrationId - 1]     = registrationId;
-    if (colMap.participantId)      newRow[colMap.participantId - 1]      = participantId;
-    if (colMap.password)           newRow[colMap.password - 1]           = temporaryPassword;
-    if (colMap.name)               newRow[colMap.name - 1]               = name;
+    if (colMap.timestamp)         newRow[colMap.timestamp - 1]         = formattedTimestamp;
+    if (colMap.name)              newRow[colMap.name - 1]              = name;
     if (colMap.rollNumber)         newRow[colMap.rollNumber - 1]         = rollNumber;
     if (colMap.email)              newRow[colMap.email - 1]              = email;
     if (colMap.mobile)             newRow[colMap.mobile - 1]             = mobile;
-    if (colMap.year)               newRow[colMap.year - 1]               = year;
-    if (colMap.branch)             newRow[colMap.branch - 1]             = branch;
-    if (colMap.section)            newRow[colMap.section - 1]            = section;
-    if (colMap.paymentStatus)      newRow[colMap.paymentStatus - 1]      = screenshotFormula || "Paid";
-    if (colMap.registrationStatus) newRow[colMap.registrationStatus - 1] = "Registered";
-    if (colMap.registeredDate)     newRow[colMap.registeredDate - 1]     = formattedTimestamp;
-    if (colMap.yearAndBranch)      newRow[colMap.yearAndBranch - 1]      = (year && branch) ? `${year} - ${branch}` : (year || branch || "");
+    if (colMap.yearAndBranch)      newRow[colMap.yearAndBranch - 1]      = yearAndBranch;
+    if (colMap.paymentScreenshot)  newRow[colMap.paymentScreenshot - 1]  = screenshotFormula || "Paid";
+    if (colMap.registrationId)     newRow[colMap.registrationId - 1]     = registrationId;
+    if (colMap.participantId)      newRow[colMap.participantId - 1]      = participantId;
+    if (colMap.password)           newRow[colMap.password - 1]           = temporaryPassword;
+
+    // Guaranteed positional fallbacks for standard columns A..J (indices 0..9)
+    if (!colMap.timestamp && newRow[0] === "")         newRow[0] = formattedTimestamp;
+    if (!colMap.name && newRow[1] === "")              newRow[1] = name;
+    if (!colMap.rollNumber && newRow[2] === "")        newRow[2] = rollNumber;
+    if (!colMap.email && newRow[3] === "")             newRow[3] = email;
+    if (!colMap.mobile && newRow[4] === "")            newRow[4] = mobile;
+    if (!colMap.yearAndBranch && newRow[5] === "")     newRow[5] = yearAndBranch;
+    if (!colMap.paymentScreenshot && newRow[6] === "") newRow[6] = screenshotFormula || "Paid";
+    if (!colMap.registrationId && newRow[7] === "")    newRow[7] = registrationId;
+    if (!colMap.participantId && newRow[8] === "")     newRow[8] = participantId;
+    if (!colMap.password && newRow[9] === "")          newRow[9] = temporaryPassword;
 
     // 12. Append Registration Row (Participant ID & Password on SAME ROW)
     sheet.appendRow(newRow);
@@ -330,18 +376,21 @@ function doPost(e) {
     const newRange = sheet.getRange(targetRowIndex, 1, 1, newRow.length);
     newRange.setVerticalAlignment("middle");
 
-    // Center identifiers, credentials, codes, and statuses
-    if (colMap.registrationId)     sheet.getRange(targetRowIndex, colMap.registrationId).setHorizontalAlignment("center");
-    if (colMap.participantId)      sheet.getRange(targetRowIndex, colMap.participantId).setHorizontalAlignment("center");
-    if (colMap.password)           sheet.getRange(targetRowIndex, colMap.password).setHorizontalAlignment("center");
+    // Explicitly guarantee Columns I (Participant ID) and J (Password) are populated on the same row
+    const partCol = colMap.participantId || 9;
+    const pwdCol = colMap.password || 10;
+    sheet.getRange(targetRowIndex, partCol).setValue(participantId).setHorizontalAlignment("center");
+    sheet.getRange(targetRowIndex, pwdCol).setValue(temporaryPassword).setHorizontalAlignment("center");
+
+    // Center identifiers, credentials, and links
+    if (colMap.timestamp)         sheet.getRange(targetRowIndex, colMap.timestamp).setHorizontalAlignment("center");
     if (colMap.rollNumber)         sheet.getRange(targetRowIndex, colMap.rollNumber).setHorizontalAlignment("center");
     if (colMap.mobile)             sheet.getRange(targetRowIndex, colMap.mobile).setHorizontalAlignment("center");
-    if (colMap.year)               sheet.getRange(targetRowIndex, colMap.year).setHorizontalAlignment("center");
-    if (colMap.branch)             sheet.getRange(targetRowIndex, colMap.branch).setHorizontalAlignment("center");
-    if (colMap.section)            sheet.getRange(targetRowIndex, colMap.section).setHorizontalAlignment("center");
-    if (colMap.paymentStatus)      sheet.getRange(targetRowIndex, colMap.paymentStatus).setHorizontalAlignment("center");
-    if (colMap.registrationStatus) sheet.getRange(targetRowIndex, colMap.registrationStatus).setHorizontalAlignment("center");
-    if (colMap.registeredDate)     sheet.getRange(targetRowIndex, colMap.registeredDate).setHorizontalAlignment("center");
+    if (colMap.paymentScreenshot)  sheet.getRange(targetRowIndex, colMap.paymentScreenshot).setHorizontalAlignment("center");
+    if (colMap.registrationId)     sheet.getRange(targetRowIndex, colMap.registrationId).setHorizontalAlignment("center");
+
+    // Server-side debug log containing ONLY registrationId, participantId, sheet, targetRow, status
+    Logger.log("registrationId=" + registrationId + ", participantId=" + participantId + ", sheet=" + sheet.getName() + ", targetRow=" + targetRowIndex + ", status=SUCCESS");
 
     // 13. Return JSON Success Response with credentials
     return createJsonResponse({
@@ -355,10 +404,13 @@ function doPost(e) {
     });
 
   } catch (globalError) {
-    Logger.log("Google Sheets credential column update failed: " + globalError.toString());
+    const safeRegId = (data && data.registrationId) ? data.registrationId : "UNKNOWN";
+    const safePartId = (data && data.participantId) ? data.participantId : "UNKNOWN";
+    const safeSheet = (typeof sheet !== "undefined" && sheet) ? sheet.getName() : SHEET_NAME;
+    Logger.log("registrationId=" + safeRegId + ", participantId=" + safePartId + ", sheet=" + safeSheet + ", targetRow=UNKNOWN, status=FAILED, error=" + globalError.message);
     return createJsonResponse({
       success: false,
-      message: "Server error processing registration: " + globalError.message
+      message: "Google Sheets credential column update failed: " + globalError.message
     });
   } finally {
     lock.releaseLock();
@@ -366,7 +418,7 @@ function doPost(e) {
 }
 
 /**
- * Handles GET requests - useful for health checking the endpoint in a browser.
+ * Handles GET requests - health checking
  */
 function doGet(e) {
   return createJsonResponse({
@@ -380,25 +432,26 @@ function doGet(e) {
 
 
 // ============================================================================
-// DYNAMIC HEADER MAPPING & ROW LOOKUP UTILITIES
+// DYNAMIC HEADER MAPPING & AUTO-COLUMN CREATION
 // ============================================================================
 
 /**
- * Scans row 1 headers, adds any missing required columns (Participant ID, Password, etc.),
- * and returns dynamic column index mappings.
+ * Scans row 1 headers. If columns I (Participant ID) and J (Password) do not exist,
+ * automatically appends them after Registration ID (H) and returns dynamic mappings.
  */
-function getHeaderMapping(sheet) {
+function ensureAndMapHeaders(sheet) {
+  const lastRow = sheet.getLastRow();
   let lastCol = Math.max(1, sheet.getLastColumn());
-  let headerValues = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
-  let headers = headerValues.map(h => String(h || "").trim());
 
-  // If sheet has zero rows or empty headers, initialize default header row
-  if (sheet.getLastRow() === 0 || (headers.length === 1 && !headers[0])) {
-    sheet.getRange(1, 1, 1, REQUIRED_HEADERS.length).setValues([REQUIRED_HEADERS]);
+  // If sheet is completely empty, initialize default columns A..J
+  if (lastRow === 0) {
+    sheet.appendRow(REQUIRED_HEADERS);
     formatHeaderRow(sheet, REQUIRED_HEADERS.length);
     lastCol = REQUIRED_HEADERS.length;
-    headers = [...REQUIRED_HEADERS];
   }
+
+  let headerValues = sheet.getRange(1, 1, 1, Math.max(lastCol, sheet.getLastColumn())).getValues()[0];
+  let headers = headerValues.map(h => String(h || "").trim());
 
   function findCol(aliases) {
     for (let i = 0; i < headers.length; i++) {
@@ -413,43 +466,19 @@ function getHeaderMapping(sheet) {
   }
 
   let colMap = {
+    timestamp:          findCol(["Timestamp", "Registered Date", "Date", "Created At", "Time"]),
+    name:               findCol(["Name", "Full Name", "Participant Name", "Student Name"]),
+    rollNumber:         findCol(["Roll Number", "Roll No", "Roll", "Student ID", "RollNumber", "HT No"]),
+    email:              findCol(["Email", "Email Address", "Email ID"]),
+    mobile:             findCol(["Mobile Number", "Mobile", "Phone Number", "Phone", "Contact Number"]),
+    yearAndBranch:      findCol(["Mobile Number / Year-Branch information", "Year-Branch information", "Year & Branch", "Year and Branch", "Year-Branch", "Year/Branch", "Academic Info", "Branch", "Year"]),
+    paymentScreenshot:  findCol(["Payment Screenshot", "Screenshot", "Payment", "Payment Status", "Screenshot Link", "UTR"]),
     registrationId:     findCol(["Registration ID", "RegistrationID", "Reg ID", "RegID"]),
     participantId:      findCol(["Participant ID", "ParticipantID", "Part ID", "Participant"]),
-    password:           findCol(["Password", "Temporary Password", "Temp Password", "Password Hash"]),
-    name:               findCol(["Name", "Full Name", "Participant Name", "Student Name"]),
-    rollNumber:         findCol(["Roll Number", "Roll No", "Roll", "Student ID", "RollNumber"]),
-    email:              findCol(["Email", "Email Address", "Email ID"]),
-    mobile:             findCol(["Mobile Number", "Mobile", "Phone Number", "Phone"]),
-    year:               findCol(["Year", "Academic Year"]),
-    branch:             findCol(["Branch", "Department"]),
-    section:            findCol(["Section", "Sec"]),
-    paymentStatus:      findCol(["Payment Status", "Payment Screenshot", "Screenshot", "Payment", "PaymentStatus"]),
-    registrationStatus: findCol(["Registration Status", "Status", "RegistrationStatus"]),
-    registeredDate:     findCol(["Registered Date", "Timestamp", "Date", "RegisteredDate", "Created At"]),
-    yearAndBranch:      findCol(["Year & Branch", "Year and Branch"]),
+    password:           findCol(["Password", "Temporary Password", "Temp Password", "Password Hash"])
   };
 
-  // If Participant ID column does not exist, add it to headers
-  if (!colMap.participantId) {
-    const newCol = sheet.getLastColumn() + 1;
-    sheet.getRange(1, newCol).setValue("Participant ID");
-    styleHeaderCell(sheet, newCol);
-    sheet.setColumnWidth(newCol, 160);
-    headers.push("Participant ID");
-    colMap.participantId = newCol;
-  }
-
-  // If Password column does not exist, add it to headers
-  if (!colMap.password) {
-    const newCol = sheet.getLastColumn() + 1;
-    sheet.getRange(1, newCol).setValue("Password");
-    styleHeaderCell(sheet, newCol);
-    sheet.setColumnWidth(newCol, 160);
-    headers.push("Password");
-    colMap.password = newCol;
-  }
-
-  // If Registration ID column does not exist, add it to headers
+  // If Registration ID column is missing, add it (Column H / 8)
   if (!colMap.registrationId) {
     const newCol = sheet.getLastColumn() + 1;
     sheet.getRange(1, newCol).setValue("Registration ID");
@@ -457,6 +486,26 @@ function getHeaderMapping(sheet) {
     sheet.setColumnWidth(newCol, 200);
     headers.push("Registration ID");
     colMap.registrationId = newCol;
+  }
+
+  // Column I (9): Participant ID - place immediately after Registration ID
+  if (!colMap.participantId) {
+    const targetCol = colMap.registrationId ? colMap.registrationId + 1 : sheet.getLastColumn() + 1;
+    sheet.getRange(1, targetCol).setValue("Participant ID");
+    styleHeaderCell(sheet, targetCol);
+    sheet.setColumnWidth(targetCol, 160);
+    headers[targetCol - 1] = "Participant ID";
+    colMap.participantId = targetCol;
+  }
+
+  // Column J (10): Password - place immediately after Participant ID
+  if (!colMap.password) {
+    const targetCol = colMap.participantId ? colMap.participantId + 1 : sheet.getLastColumn() + 1;
+    sheet.getRange(1, targetCol).setValue("Password");
+    styleHeaderCell(sheet, targetCol);
+    sheet.setColumnWidth(targetCol, 160);
+    headers[targetCol - 1] = "Password";
+    colMap.password = targetCol;
   }
 
   return { headers, colMap };
@@ -481,14 +530,21 @@ function formatHeaderRow(sheet, totalCols) {
   headerRange.setVerticalAlignment("middle");
   sheet.setRowHeight(1, 40);
 
-  // Default widths
-  for (let c = 1; c <= totalCols; c++) {
-    sheet.setColumnWidth(c, 160);
-  }
+  // Column width formatting
+  sheet.setColumnWidth(1, 170); // Timestamp (A)
+  sheet.setColumnWidth(2, 200); // Name (B)
+  sheet.setColumnWidth(3, 140); // Roll Number (C)
+  sheet.setColumnWidth(4, 220); // Email (D)
+  sheet.setColumnWidth(5, 140); // Mobile (E)
+  sheet.setColumnWidth(6, 180); // Year & Branch (F)
+  sheet.setColumnWidth(7, 160); // Payment Screenshot (G)
+  sheet.setColumnWidth(8, 200); // Registration ID (H)
+  sheet.setColumnWidth(9, 160); // Participant ID (I)
+  sheet.setColumnWidth(10, 160); // Password (J)
 }
 
 /**
- * Searches column for Registration ID and returns 1-based sheet row index.
+ * Searches Column H (or mapped Registration ID column) for registrationId
  */
 function findRowByRegistrationId(sheet, registrationId, regCol) {
   if (!registrationId || !regCol) return -1;
@@ -500,14 +556,14 @@ function findRowByRegistrationId(sheet, registrationId, regCol) {
 
   for (let i = 0; i < values.length; i++) {
     if (String(values[i][0]).trim().toUpperCase() === target) {
-      return i + 2;
+      return i + 2; // 1-based row index
     }
   }
   return -1;
 }
 
 /**
- * Searches for existing Roll Number or Email.
+ * Searches for existing Roll Number or Email
  */
 function findRowByRollOrEmail(sheet, rollNumber, email, rollCol, emailCol) {
   const lastRow = sheet.getLastRow();
@@ -538,7 +594,7 @@ function findRowByRollOrEmail(sheet, rollNumber, email, rollCol, emailCol) {
 }
 
 /**
- * Generates the next sequential Registration ID (e.g. CODESTORM-2026-0001).
+ * Generates the next sequential Registration ID (e.g. CODESTORM-2026-0001)
  */
 function generateNextRegistrationId(sheet, regCol) {
   const lastRow = sheet.getLastRow();
@@ -563,19 +619,20 @@ function generateNextRegistrationId(sheet, regCol) {
 }
 
 /**
- * Generates the Participant ID (e.g. CS26-0001) matching the registration sequence.
+ * Generates the Participant ID (e.g. CS26-0001) matching registration number
  */
 function generateParticipantId(registrationId) {
   if (registrationId && registrationId.startsWith(ID_PREFIX)) {
     const numPart = registrationId.substring(ID_PREFIX.length);
     return PARTICIPANT_ID_PREFIX + numPart;
   }
-  const randNum = String(Math.floor(1000 + Math.random() * 9000));
-  return PARTICIPANT_ID_PREFIX + randNum;
+  const match = String(registrationId).match(/\d+$/);
+  const numPart = match ? match[0] : String(Math.floor(1000 + Math.random() * 9000));
+  return PARTICIPANT_ID_PREFIX + numPart.padStart(4, "0");
 }
 
 /**
- * Generates an unpredictable 8-character temporary password containing uppercase, lowercase, and numbers.
+ * Generates an unpredictable 8-character temporary password
  */
 function generateTemporaryPassword(length) {
   length = length || 8;
@@ -604,23 +661,7 @@ function generateTemporaryPassword(length) {
 }
 
 /**
- * Securely hashes the password with SHA-256 for reference storage if needed.
- */
-function hashPassword(password) {
-  const digest = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, password, Utilities.Charset.UTF_8);
-  let hexString = "";
-  for (let i = 0; i < digest.length; i++) {
-    let byteVal = digest[i];
-    if (byteVal < 0) byteVal += 256;
-    let byteHex = byteVal.toString(16);
-    if (byteHex.length === 1) byteHex = "0" + byteHex;
-    hexString += byteHex;
-  }
-  return hexString;
-}
-
-/**
- * Initializes and formats the Google Sheet header row and styling.
+ * Initializes and formats the Google Sheet header row
  */
 function initSheetFormatting(sheet) {
   if (sheet.getLastRow() === 0) {
@@ -640,26 +681,22 @@ function initSheetFormatting(sheet) {
   }
 }
 
-/**
- * Creates a CORS-enabled JSON text output.
- */
 function createJsonResponse(obj, statusCode) {
   const output = ContentService.createTextOutput(JSON.stringify(obj));
   output.setMimeType(ContentService.MimeType.JSON);
   return output;
 }
 
-
 // ============================================================================
 // ADMIN SETUP & VERIFICATION UTILITIES
 // ============================================================================
 
+/**
+ * Run this function once from Apps Script editor to ensure Columns I and J exist
+ * and all headers A through J are properly styled.
+ */
 function setupSheet() {
-  if (!SPREADSHEET_ID || SPREADSHEET_ID === "YOUR_GOOGLE_SHEET_ID") {
-    throw new Error("Please replace SPREADSHEET_ID at the top of the script first!");
-  }
-
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const ss = getSpreadsheet();
   let sheet = ss.getSheetByName(SHEET_NAME);
 
   if (!sheet) {
@@ -672,6 +709,52 @@ function setupSheet() {
     }
   }
 
+  ensureAndMapHeaders(sheet);
   initSheetFormatting(sheet);
-  Logger.log("✅ Google Sheet initialized and formatted successfully on tab: '" + sheet.getName() + "'!");
+  Logger.log("Google Sheet verified and formatted with Columns A through J (including I: Participant ID and J: Password)!");
+}
+
+/**
+ * Utility to backfill Participant ID and Temporary Password for any existing rows
+ * that were registered before Columns I and J were added.
+ * Select 'populateMissingCredentialsForExistingRows' in Apps Script and click Run.
+ */
+function populateMissingCredentialsForExistingRows() {
+  const ss = getSpreadsheet();
+  let sheet = ss.getSheetByName(SHEET_NAME);
+  if (!sheet) {
+    const allSheets = ss.getSheets();
+    sheet = allSheets[0];
+  }
+
+  const { colMap } = ensureAndMapHeaders(sheet);
+  const lastRow = sheet.getLastRow();
+  if (lastRow <= 1) {
+    Logger.log("No data rows found to populate.");
+    return;
+  }
+
+  let updatedCount = 0;
+  for (let r = 2; r <= lastRow; r++) {
+    const regId = colMap.registrationId ? String(sheet.getRange(r, colMap.registrationId).getValue()).trim() : "";
+    const currentPartId = colMap.participantId ? String(sheet.getRange(r, colMap.participantId).getValue()).trim() : "";
+    const currentPassword = colMap.password ? String(sheet.getRange(r, colMap.password).getValue()).trim() : "";
+
+    if (!currentPartId || !currentPassword) {
+      const pId = currentPartId || generateParticipantId(regId || ("CODESTORM-2026-" + String(r - 1).padStart(4, "0")));
+      const pPwd = currentPassword || generateTemporaryPassword(8);
+
+      if (colMap.participantId && !currentPartId) {
+        sheet.getRange(r, colMap.participantId).setValue(pId);
+        sheet.getRange(r, colMap.participantId).setHorizontalAlignment("center");
+      }
+      if (colMap.password && !currentPassword) {
+        sheet.getRange(r, colMap.password).setValue(pPwd);
+        sheet.getRange(r, colMap.password).setHorizontalAlignment("center");
+      }
+      updatedCount++;
+    }
+  }
+
+  Logger.log("Successfully populated credentials on the SAME ROW for " + updatedCount + " existing registrations!");
 }

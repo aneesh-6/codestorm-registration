@@ -125,8 +125,12 @@ export default async function handler(req, res) {
     }
 
     // Sync participant credentials to Google Sheet (Participant ID & Password on SAME ROW)
+    const yearAndBranch = (year && branch)
+      ? (section ? `${year} - ${branch} (${section})` : `${year} - ${branch}`)
+      : (body.yearAndBranch || year || branch || 'CSE');
+
     try {
-      await writeCredentialsToGoogleSheet({
+      const sheetResult = await writeCredentialsToGoogleSheet({
         registrationId,
         participantId,
         temporaryPassword,
@@ -137,13 +141,26 @@ export default async function handler(req, res) {
         year,
         branch,
         section,
-        paymentStatus: body.paymentStatus || 'Paid',
-        registrationStatus: 'Registered',
-        registeredDate: new Date().toISOString().replace('T', ' ').substring(0, 19),
+        yearAndBranch,
+        paymentScreenshot: 'Paid',
+        screenshotBase64: body.screenshotBase64 || body.paymentScreenshot || '',
+        timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
       });
+
+      if (sheetResult && sheetResult.success === false) {
+        const errorDetail = sheetResult.error || sheetResult.note || 'Unable to write participant credentials to Google Sheet.';
+        console.error('Google Sheets credential column update failed:', errorDetail);
+        return res.status(500).json({
+          success: false,
+          message: `Google Sheets credential column update failed: ${errorDetail}`
+        });
+      }
     } catch (sheetErr) {
-      // Safe logging without exposing password or keys
       console.error('Google Sheets credential column update failed:', sheetErr.message);
+      return res.status(500).json({
+        success: false,
+        message: `Google Sheets credential column update failed: ${sheetErr.message}`
+      });
     }
 
     // Return the canonical success response structure

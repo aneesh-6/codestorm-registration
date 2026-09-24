@@ -105,7 +105,7 @@ export default function RegistrationSection({ onRegistrationSuccess }) {
         screenshotBase64 = await readFileAsBase64(form.paymentScreenshot);
       }
 
-      // Pre-generate credentials so they can be immediately written to the same row in Google Sheets
+      // Pre-generate secure credentials and fallback IDs
       const randSeq = String(Math.floor(1000 + Math.random() * 9000));
       const preRegistrationId = `CODESTORM-2026-${randSeq}`;
       const preParticipantId = `CS26-${randSeq}`;
@@ -119,8 +119,6 @@ export default function RegistrationSection({ onRegistrationSuccess }) {
         year: form.year,
         branch: form.branch,
         section: form.section,
-        registrationId: preRegistrationId,
-        participantId: preParticipantId,
         temporaryPassword: preTemporaryPassword,
         screenshotBase64: screenshotBase64,
         screenshotType: form.paymentScreenshot?.type || 'image/jpeg',
@@ -130,19 +128,72 @@ export default function RegistrationSection({ onRegistrationSuccess }) {
       let finalRegistrationId = null;
       let participantId = null;
       let temporaryPassword = null;
+      let registrationComplete = false;
 
-      const isGoogleConfigured = GOOGLE_SCRIPT_URL && GOOGLE_SCRIPT_URL.trim() !== '' && GOOGLE_SCRIPT_URL.startsWith('https://script.google.com/macros/s/');
+      // 1. PRIMARY: Submit to authoritative Registration API (/api/register)
+      // On Vercel, this serverless function uses Google Service Account (GOOGLE_SHEET_ID,
+      // GOOGLE_SERVICE_ACCOUNT_EMAIL, GOOGLE_PRIVATE_KEY) to write all 10 columns
+      // (including Participant ID in Col I and Password in Col J) to Google Sheets on the SAME ROW.
+      const primaryEndpoint = API_URL ? `${API_URL}/api/register` : '/api/register';
 
-      // Save Registration & Generate Participant Credentials
-      if (isGoogleConfigured) {
+      try {
+        const res = await fetch(primaryEndpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        const responseText = await res.text();
+        let json = null;
         try {
-          // Submit directly to Google Apps Script Web App (text/plain prevents CORS preflight failure)
+          json = JSON.parse(responseText);
+        } catch {
+          console.warn('Primary registration endpoint returned non-JSON:', responseText);
+        }
+
+        // Duplicate registration check
+        if (res.status === 409 || (json && json.success === false && (json.message?.includes('already registered') || json.error?.includes('already registered')))) {
+          const errorMsg = json?.message || json?.error || 'This roll number or email is already registered.';
+          console.error('Registration conflict:', errorMsg);
+          setApiError(errorMsg);
+          const errorBanner = document.querySelector('.api-error-banner');
+          if (errorBanner) errorBanner.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          return;
+        }
+
+        // Strict Google Sheets error reporting
+        if (res.status === 500 && json?.message && json.message.includes('Google Sheets')) {
+          console.error('Google Sheets write failure:', json.message);
+          throw new Error(json.message);
+        }
+
+        if (res.ok && json?.success) {
+          finalRegistrationId = json.registrationId || preRegistrationId;
+          participantId = json.participantId || preParticipantId;
+          temporaryPassword = json.temporaryPassword || preTemporaryPassword;
+          registrationComplete = true;
+        }
+      } catch (primaryErr) {
+        console.warn('Primary registration API call encountered an issue:', primaryErr.message);
+        if (primaryErr.message && primaryErr.message.includes('Google Sheets')) {
+          throw primaryErr;
+        }
+      }
+
+      // 2. FALLBACK: If primary endpoint was unreachable (e.g. offline dev), submit via Google Apps Script Web App
+      if (!registrationComplete) {
+        const isGoogleConfigured = GOOGLE_SCRIPT_URL && GOOGLE_SCRIPT_URL.trim() !== '' && GOOGLE_SCRIPT_URL.startsWith('https://script.google.com/macros/s/');
+
+        if (isGoogleConfigured) {
           const res = await fetch(GOOGLE_SCRIPT_URL, {
             method: 'POST',
-            headers: {
-              'Content-Type': 'text/plain;charset=utf-8',
-            },
-            body: JSON.stringify(payload),
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({
+              ...payload,
+              registrationId: preRegistrationId,
+              participantId: preParticipantId,
+              temporaryPassword: preTemporaryPassword,
+            }),
           });
 
           const responseText = await res.text();
@@ -154,7 +205,6 @@ export default function RegistrationSection({ onRegistrationSuccess }) {
             throw new Error('Registration server returned an unexpected response. Please try again.');
           }
 
-          // Handle error responses from backend
           if (!res.ok || !json.success) {
             const errorMsg = json?.message || json?.error || (res.status === 409 ? 'This roll number or email is already registered.' : 'Registration could not be completed. Please try again.');
             console.error('Registration error:', errorMsg);
@@ -164,98 +214,13 @@ export default function RegistrationSection({ onRegistrationSuccess }) {
             return;
           }
 
-          // Backend save was successful
           finalRegistrationId = json.registrationId || preRegistrationId;
           participantId = json.participantId || preParticipantId;
           temporaryPassword = json.temporaryPassword || preTemporaryPassword;
-
-          // If the deployed Apps Script didn't return credentials, update the existing row in Google Sheets
-          if (!json.participantId || !json.temporaryPassword) {
-            try {
-              await fetch(GOOGLE_SCRIPT_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                body: JSON.stringify({
-                  action: 'updateCredentials',
-                  registrationId: finalRegistrationId,
-                  participantId,
-                  temporaryPassword,
-                }),
-              });
-            } catch (updateErr) {
-              console.warn('Google Sheets in-place credential update note:', updateErr.message);
-            }
-          }
-
-          // Mandatory platform account sync (saves to authoritative auth database with bcrypt hash)
-          const platformEndpoint = API_URL ? `${API_URL}/api/register` : '/api/register';
-          try {
-            const syncRes = await fetch(platformEndpoint, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                ...payload,
-                registrationId: finalRegistrationId,
-                participantId,
-                temporaryPassword,
-              }),
-            });
-            const syncJson = await syncRes.json();
-            if (syncJson?.participantId) participantId = syncJson.participantId;
-            if (syncJson?.temporaryPassword) temporaryPassword = syncJson.temporaryPassword;
-          } catch (syncErr) {
-            console.warn('Authoritative platform sync note:', syncErr.message);
-          }
-        } catch (scriptErr) {
-          console.warn('Google Script direct submit encountered an issue, falling back to direct platform API:', scriptErr.message);
-          // Fall back to direct Event Platform API
-          const fallbackEndpoint = API_URL ? `${API_URL}/api/register` : '/api/register';
-          const fallbackRes = await fetch(fallbackEndpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-          });
-          const fallbackJson = await fallbackRes.json();
-          if (!fallbackRes.ok || !fallbackJson.success) {
-            throw new Error(fallbackJson?.error || fallbackJson?.message || 'Registration could not be completed.');
-          }
-          finalRegistrationId = fallbackJson.registrationId || 'CODESTORM-2026-0001';
-          participantId = fallbackJson.participantId;
-          temporaryPassword = fallbackJson.temporaryPassword;
+          registrationComplete = true;
+        } else {
+          throw new Error('Registration server could not be reached. Please check your internet connection and try again.');
         }
-
-      } else {
-        // Direct Event Conducting Platform API endpoint submission
-        const endpoint = API_URL ? `${API_URL}/api/register` : '/api/register';
-        const res = await fetch(endpoint, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(payload),
-        });
-
-        const responseText = await res.text();
-        let json = null;
-        try {
-          json = JSON.parse(responseText);
-        } catch {
-          console.error('Registration parse error. Response was:', responseText);
-          throw new Error('Registration server returned an unexpected response. Please try again.');
-        }
-
-        if (!res.ok || !json.success) {
-          const errorMsg = json?.message || json?.error || (res.status === 409 ? 'This roll number or email is already registered.' : 'Registration could not be completed. Please check your details and try again.');
-          console.error('Registration error:', errorMsg);
-          setApiError(errorMsg);
-          const errorBanner = document.querySelector('.api-error-banner');
-          if (errorBanner) errorBanner.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          return;
-        }
-
-        finalRegistrationId = json.registrationId || 'CODESTORM-2026-0001';
-        participantId = json.participantId || `CS26-${(String(finalRegistrationId).match(/\d+$/) || ['0001'])[0].padStart(4, '0')}`;
-        temporaryPassword = json.temporaryPassword || generateClientFallbackPassword(8);
       }
 
       // Registration successfully completed with participant credentials

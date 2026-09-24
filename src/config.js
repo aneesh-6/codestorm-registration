@@ -53,7 +53,8 @@ export const EVENT_PLATFORM_URL =
  */
 export const API_URL =
   import.meta.env.VITE_API_URL ||
-  import.meta.env.VITE_EVENT_PLATFORM_URL ||
-  "http://localhost:5000";
+  (typeof window !== 'undefined' && window.location.hostname !== 'localhost'
+    ? ''
+    : (import.meta.env.VITE_EVENT_PLATFORM_URL || 'http://localhost:5000'));
 
 
