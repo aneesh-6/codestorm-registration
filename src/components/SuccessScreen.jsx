@@ -25,9 +25,7 @@ export default function SuccessScreen({ data, onBack }) {
   const printRef = useRef();
 
   const handleCopyCredentials = () => {
-    const pId = participantId || 'CS26-0001';
-    const pwd = temporaryPassword || 'K7mP4xQ9';
-    const textToCopy = `CodeStorm 2026 Login Credentials\n\nParticipant ID: ${pId}\nTemporary Password: ${pwd}`;
+    const textToCopy = `CodeStorm 2026 Login Credentials\n\nLogin ID: ${registrationId}\nPassword: ${registrationId}\n\nUse your Registration ID as both your Login ID and Password.`;
 
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(textToCopy);
@@ -45,7 +43,6 @@ Malla Reddy Engineering College and Management Sciences
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 REGISTRATION ID:  ${registrationId}
-PARTICIPANT ID:   ${participantId || 'CS26-0001'}
 Name:             ${name}
 Roll Number:      ${rollNumber || 'N/A'}
 Year:             ${year || 'N/A'}
@@ -57,7 +54,7 @@ Transaction ID:   ${transactionId || 'N/A'}
 Registered On:    ${timestamp}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Keep this Registration ID and Participant ID for future reference.
+Keep this Registration ID for future reference and Event Login.
 THINK • DEBUG • PREDICT • CODE
     `.trim();
     const blob = new Blob([content], { type: 'text/plain' });
@@ -128,7 +125,7 @@ THINK • DEBUG • PREDICT • CODE
               textTransform: 'uppercase',
               marginBottom: '12px'
             }}>
-              YOUR EVENT LOGIN CREDENTIALS
+              LOGIN CREDENTIALS
             </div>
 
             <div style={{
@@ -143,19 +140,19 @@ THINK • DEBUG • PREDICT • CODE
             }}>
               <div>
                 <div style={{ fontSize: '0.75rem', color: 'rgba(255, 255, 255, 0.65)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  Participant ID
+                  Login ID
                 </div>
-                <div style={{ fontSize: '1.5rem', fontWeight: 900, fontFamily: 'monospace', color: '#38bdf8', letterSpacing: '0.06em', marginTop: '4px' }}>
-                  {participantId || 'CS26-0001'}
+                <div style={{ fontSize: '1.35rem', fontWeight: 900, fontFamily: 'monospace', color: '#38bdf8', letterSpacing: '0.04em', marginTop: '4px' }}>
+                  {registrationId}
                 </div>
               </div>
 
               <div>
                 <div style={{ fontSize: '0.75rem', color: 'rgba(255, 255, 255, 0.65)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  Temporary Password
+                  Password
                 </div>
-                <div style={{ fontSize: '1.5rem', fontWeight: 900, fontFamily: 'monospace', color: '#f97316', letterSpacing: '0.06em', marginTop: '4px' }}>
-                  {temporaryPassword || 'K7mP4xQ9'}
+                <div style={{ fontSize: '1.35rem', fontWeight: 900, fontFamily: 'monospace', color: '#f97316', letterSpacing: '0.04em', marginTop: '4px' }}>
+                  {registrationId}
                 </div>
               </div>
             </div>
@@ -166,13 +163,13 @@ THINK • DEBUG • PREDICT • CODE
               gap: '8px',
               fontSize: '0.875rem',
               color: '#fbbf24',
-              fontWeight: 500,
+              fontWeight: 600,
               marginBottom: '20px',
               lineHeight: 1.4
             }}>
-              <span>⚠️</span>
+              <span>ℹ️</span>
               <span>
-                Save these credentials safely. You will need them to access the CodeStorm Event Platform.
+                Use your Registration ID as both your Login ID and Password.
               </span>
             </div>
 

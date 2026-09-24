@@ -79,21 +79,17 @@ router.post('/register', handleUpload, async (req, res) => {
     // --- Generate or reuse unique Registration ID ---
     const registrationId = providedRegId || await generateUniqueRegistrationId(Registration);
 
-    // --- Generate or reuse unique Participant ID (CS26-0001, CS26-0002...) ---
-    const participantId = providedPartId || await generateUniqueParticipantId(Registration, User, registrationId);
-
-    // --- Generate or reuse secure random temporary password & hash ---
-    const temporaryPassword = providedTempPassword || generateTemporaryPassword(10);
+    // --- Hash Registration ID as password ---
     const salt = bcrypt ? bcrypt.genSaltSync(10) : '$2b$10$abcdefghijklmnopqrstuu';
-    const passwordHash = bcrypt ? bcrypt.hashSync(temporaryPassword, salt) : temporaryPassword;
+    const passwordHash = bcrypt ? bcrypt.hashSync(registrationId, salt) : registrationId;
 
     // --- Save registration ---
     const reg = new Registration({
       registrationId,
-      participantId,
+      participantId: registrationId,
       passwordHash,
       role: 'participant',
-      mustChangePassword: true,
+      mustChangePassword: false,
       name: name.trim(),
       college: (college || 'Malla Reddy Engineering College and Management Sciences').trim(),
       rollNumber: cleanRoll,
@@ -113,25 +109,23 @@ router.post('/register', handleUpload, async (req, res) => {
     // --- Save corresponding User account ---
     try {
       const user = new User({
-        participantId,
+        participantId: registrationId,
         registrationId,
         name: reg.name,
         email: reg.email,
         passwordHash,
         role: 'participant',
-        mustChangePassword: true,
+        mustChangePassword: false,
       });
       await user.save();
     } catch (userErr) {
       console.error('[User Creation Warning]', userErr.message);
     }
 
-    // --- Sync credentials to Google Sheets on the same row ---
+    // --- Sync to Google Sheets strictly Columns A through H ---
     try {
       await writeCredentialsToGoogleSheet({
         registrationId: reg.registrationId,
-        participantId: reg.participantId,
-        temporaryPassword,
         name: reg.name,
         rollNumber: reg.rollNumber,
         email: reg.email,
@@ -144,17 +138,16 @@ router.post('/register', handleUpload, async (req, res) => {
         registeredDate: new Date().toISOString().replace('T', ' ').substring(0, 19),
       });
     } catch (sheetErr) {
-      console.error('Google Sheets credential column update failed:', sheetErr.message);
+      console.error('Google Sheets update failed:', sheetErr.message);
     }
 
     res.status(201).json({
       success: true,
-      message: 'Registration successful!',
       registrationId: reg.registrationId,
-      participantId: reg.participantId,
-      temporaryPassword,
       name: reg.name,
       email: reg.email,
+      rollNumber: reg.rollNumber,
+      message: 'Registration successful',
     });
   } catch (err) {
     console.error('[Register Error]', err.message);

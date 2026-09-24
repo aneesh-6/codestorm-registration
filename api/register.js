@@ -2,38 +2,8 @@ import crypto from 'crypto';
 import { writeCredentialsToGoogleSheet } from './googleSheets.js';
 
 /**
- * Generate a random temporary password (minimum 8 characters, uppercase, lowercase, digits)
- */
-function generateTemporaryPassword(length = 8) {
-  const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
-  const lower = 'abcdefghjkmnpqrstuvwxyz';
-  const digits = '23456789';
-  const all = upper + lower + digits;
-
-  const getRandomChar = (set) => set[crypto.randomInt(0, set.length)];
-
-  const chars = [
-    getRandomChar(upper),
-    getRandomChar(lower),
-    getRandomChar(digits),
-  ];
-
-  while (chars.length < length) {
-    chars.push(getRandomChar(all));
-  }
-
-  // Fisher-Yates shuffle
-  for (let i = chars.length - 1; i > 0; i--) {
-    const j = crypto.randomInt(0, i + 1);
-    [chars[i], chars[j]] = [chars[j], chars[i]];
-  }
-
-  return chars.join('');
-}
-
-/**
  * Vercel Serverless Function: POST /api/register
- * Provides atomic participant credential generation and registration processing
+ * Provides participant registration processing using Registration ID as login credential
  */
 export default async function handler(req, res) {
   // Set CORS headers
@@ -82,22 +52,12 @@ export default async function handler(req, res) {
       return res.status(400).json({ success: false, message: 'A valid Email address is required.' });
     }
 
-    // Determine or generate unique IDs
+    // Determine or generate unique Registration ID (CODESTORM-2026-XXXX)
     let registrationId = body.registrationId;
     if (!registrationId) {
       const randSeq = String(crypto.randomInt(1001, 9999)).padStart(4, '0');
       registrationId = `CODESTORM-2026-${randSeq}`;
     }
-
-    let participantId = body.participantId;
-    if (!participantId) {
-      const match = String(registrationId).match(/\d+$/);
-      const numPart = match ? match[0] : '0001';
-      participantId = `CS26-${numPart.padStart(4, '0')}`;
-    }
-
-    const temporaryPassword = body.temporaryPassword || generateTemporaryPassword(8);
-    const passwordHash = crypto.createHash('sha256').update(temporaryPassword).digest('hex');
 
     // Sync to authoritative event platform backend if URL is defined
     const eventPlatformUrl = process.env.EVENT_PLATFORM_URL || process.env.VITE_EVENT_PLATFORM_URL || process.env.API_URL || 'http://localhost:5000';
@@ -115,8 +75,6 @@ export default async function handler(req, res) {
             branch,
             section,
             registrationId,
-            participantId,
-            temporaryPassword,
           })
         }).catch(e => console.warn('Platform sync note in serverless fn:', e.message));
       } catch (syncErr) {
@@ -124,7 +82,7 @@ export default async function handler(req, res) {
       }
     }
 
-    // Sync participant credentials to Google Sheet (Participant ID & Password on SAME ROW)
+    // Sync participant registration to Google Sheet (Columns A through H strictly)
     const yearAndBranch = (year && branch)
       ? (section ? `${year} - ${branch} (${section})` : `${year} - ${branch}`)
       : (body.yearAndBranch || year || branch || 'CSE');
@@ -132,8 +90,6 @@ export default async function handler(req, res) {
     try {
       const sheetResult = await writeCredentialsToGoogleSheet({
         registrationId,
-        participantId,
-        temporaryPassword,
         name: name.trim(),
         rollNumber: rollNumber.trim().toUpperCase(),
         email: email.trim().toLowerCase(),
@@ -147,36 +103,32 @@ export default async function handler(req, res) {
         timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
       });
 
-      // Step 1: Safe debug logging
-      console.log('[STEP 1 api/register.js DEBUG]', {
+      console.log('[api/register.js Google Sheets Sync]', {
         registrationId,
-        participantId,
         googleSheetsResult: sheetResult ? (sheetResult.success ? 'SUCCESS' : (sheetResult.error || 'FAILED')) : 'UNKNOWN',
         success: sheetResult ? sheetResult.success : false,
       });
 
       if (sheetResult && sheetResult.success === false) {
-        const errorDetail = sheetResult.error || sheetResult.note || 'Unable to write participant credentials to Google Sheet.';
-        console.error('Google Sheets credential column update failed:', errorDetail);
+        const errorDetail = sheetResult.error || sheetResult.note || 'Unable to write registration to Google Sheet.';
+        console.error('Google Sheets update failed:', errorDetail);
         return res.status(500).json({
           success: false,
-          message: `Google Sheets credential column update failed: ${errorDetail}`
+          message: `Google Sheets update failed: ${errorDetail}`
         });
       }
     } catch (sheetErr) {
-      console.error('Google Sheets credential column update failed:', sheetErr.message);
+      console.error('Google Sheets update failed:', sheetErr.message);
       return res.status(500).json({
         success: false,
-        message: `Google Sheets credential column update failed: ${sheetErr.message}`
+        message: `Google Sheets update failed: ${sheetErr.message}`
       });
     }
 
-    // Return the canonical success response structure
+    // Return the simplified success response structure
     return res.status(200).json({
       success: true,
       registrationId,
-      participantId,
-      temporaryPassword,
       name: name.trim(),
       email: email.trim().toLowerCase(),
       rollNumber: rollNumber.trim().toUpperCase(),

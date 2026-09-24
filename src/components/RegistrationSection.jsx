@@ -29,22 +29,6 @@ const readFileAsBase64 = (file) => {
   });
 };
 
-// Helper to generate an unpredictable temporary password if running against an older deployment
-const generateClientFallbackPassword = (length = 8) => {
-  const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
-  const lower = 'abcdefghjkmnpqrstuvwxyz';
-  const digits = '23456789';
-  const all = upper + lower + digits;
-  let pwd = '';
-  pwd += upper[Math.floor(Math.random() * upper.length)];
-  pwd += lower[Math.floor(Math.random() * lower.length)];
-  pwd += digits[Math.floor(Math.random() * digits.length)];
-  for (let i = 3; i < length; i++) {
-    pwd += all[Math.floor(Math.random() * all.length)];
-  }
-  return pwd.split('').sort(() => 0.5 - Math.random()).join('');
-};
-
 export default function RegistrationSection({ onRegistrationSuccess }) {
   const [form, setForm]             = useState(INITIAL_FORM);
   const [errors, setErrors]         = useState({});
@@ -105,11 +89,9 @@ export default function RegistrationSection({ onRegistrationSuccess }) {
         screenshotBase64 = await readFileAsBase64(form.paymentScreenshot);
       }
 
-      // Pre-generate secure credentials and fallback IDs
+      // Pre-generate unique Registration ID
       const randSeq = String(Math.floor(1000 + Math.random() * 9000));
       const preRegistrationId = `CODESTORM-2026-${randSeq}`;
-      const preParticipantId = `CS26-${randSeq}`;
-      const preTemporaryPassword = generateClientFallbackPassword(8);
 
       const payload = {
         name: form.name.trim(),
@@ -119,21 +101,16 @@ export default function RegistrationSection({ onRegistrationSuccess }) {
         year: form.year,
         branch: form.branch,
         section: form.section,
-        temporaryPassword: preTemporaryPassword,
+        registrationId: preRegistrationId,
         screenshotBase64: screenshotBase64,
         screenshotType: form.paymentScreenshot?.type || 'image/jpeg',
         screenshotName: form.paymentScreenshot?.name || 'screenshot.jpg',
       };
 
       let finalRegistrationId = null;
-      let participantId = null;
-      let temporaryPassword = null;
       let registrationComplete = false;
 
       // 1. PRIMARY: Submit to authoritative Registration API (/api/register)
-      // On Vercel, this serverless function uses Google Service Account (GOOGLE_SHEET_ID,
-      // GOOGLE_SERVICE_ACCOUNT_EMAIL, GOOGLE_PRIVATE_KEY) to write all 10 columns
-      // (including Participant ID in Col I and Password in Col J) to Google Sheets on the SAME ROW.
       const primaryEndpoint = API_URL ? `${API_URL}/api/register` : '/api/register';
 
       try {
@@ -169,8 +146,6 @@ export default function RegistrationSection({ onRegistrationSuccess }) {
 
         if (res.ok && json?.success) {
           finalRegistrationId = json.registrationId || preRegistrationId;
-          participantId = json.participantId || preParticipantId;
-          temporaryPassword = json.temporaryPassword || preTemporaryPassword;
           registrationComplete = true;
         }
       } catch (primaryErr) {
@@ -188,12 +163,7 @@ export default function RegistrationSection({ onRegistrationSuccess }) {
           const res = await fetch(GOOGLE_SCRIPT_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            body: JSON.stringify({
-              ...payload,
-              registrationId: preRegistrationId,
-              participantId: preParticipantId,
-              temporaryPassword: preTemporaryPassword,
-            }),
+            body: JSON.stringify(payload),
           });
 
           const responseText = await res.text();
@@ -215,19 +185,15 @@ export default function RegistrationSection({ onRegistrationSuccess }) {
           }
 
           finalRegistrationId = json.registrationId || preRegistrationId;
-          participantId = json.participantId || preParticipantId;
-          temporaryPassword = json.temporaryPassword || preTemporaryPassword;
           registrationComplete = true;
         } else {
           throw new Error('Registration server could not be reached. Please check your internet connection and try again.');
         }
       }
 
-      // Registration successfully completed with participant credentials
+      // Registration successfully completed with Registration ID
       const successData = {
         registrationId: finalRegistrationId,
-        participantId: participantId,
-        temporaryPassword: temporaryPassword,
         name: form.name.trim(),
         rollNumber: form.rollNumber.trim().toUpperCase(),
         email: form.email.trim(),

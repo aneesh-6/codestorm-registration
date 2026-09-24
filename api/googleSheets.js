@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 
 /**
- * Production Sheet Columns (Columns A through J):
+ * Production Sheet Columns (Columns A through H):
  * A: Timestamp
  * B: Name
  * C: Roll Number
@@ -10,8 +10,9 @@ import crypto from 'crypto';
  * F: Year / Branch / Section
  * G: Payment Screenshot
  * H: Registration ID
- * I: Participant ID
- * J: Password
+ *
+ * Registration ID serves as both Login ID and Password.
+ * No Participant ID or Password columns are written to Google Sheets.
  */
 export const REQUIRED_HEADERS = [
   'Timestamp',                  // A (0-based: 0)
@@ -21,9 +22,7 @@ export const REQUIRED_HEADERS = [
   'Mobile Number',              // E (0-based: 4)
   'Year / Branch / Section',    // F (0-based: 5)
   'Payment Screenshot',         // G (0-based: 6)
-  'Registration ID',            // H (0-based: 7)
-  'Participant ID',             // I (0-based: 8)
-  'Password'                    // J (0-based: 9)
+  'Registration ID'             // H (0-based: 7)
 ];
 
 /**
@@ -107,6 +106,7 @@ function columnIndexToLetter(colIndex) {
 
 /**
  * Writes or updates participant registration row in Google Sheets via Google Sheets API v4
+ * Columns strictly end at Registration ID (Column H)
  */
 export async function syncToGoogleSheetsApi({
   spreadsheetId,
@@ -116,7 +116,6 @@ export async function syncToGoogleSheetsApi({
   registrationData,
 }) {
   const regId = registrationData.registrationId || 'UNKNOWN';
-  const partId = registrationData.participantId || 'UNKNOWN';
 
   const accessToken = await getAccessToken(clientEmail, privateKey);
   const authHeaders = {
@@ -131,10 +130,10 @@ export async function syncToGoogleSheetsApi({
   if (!metaRes.ok) {
     const metaErr = await metaRes.text();
     if (metaRes.status === 403) {
-      console.error(`[Google Sheets API] registrationId=${regId}, participantId=${partId}, sheet=${sheetName}, targetRow=UNKNOWN, status=FAILED, error=Service Account ${clientEmail} lacks Editor access to spreadsheet ${spreadsheetId}`);
+      console.error(`[Google Sheets API] registrationId=${regId}, sheet=${sheetName}, status=FAILED, error=Service Account ${clientEmail} lacks Editor access to spreadsheet ${spreadsheetId}`);
       throw new Error(`Google Service Account (${clientEmail}) does not have Editor access to spreadsheet (${spreadsheetId}). Please grant Editor access to this service account in Google Sheets Share settings.`);
     }
-    console.error(`[Google Sheets API] registrationId=${regId}, participantId=${partId}, sheet=${sheetName}, targetRow=UNKNOWN, status=FAILED, error=${metaErr}`);
+    console.error(`[Google Sheets API] registrationId=${regId}, sheet=${sheetName}, status=FAILED, error=${metaErr}`);
     throw new Error(`Google Sheets fetch failed (${metaRes.status}): ${metaErr}`);
   }
 
@@ -156,7 +155,7 @@ export async function syncToGoogleSheetsApi({
 
   if (!getRes.ok) {
     const errText = await getRes.text();
-    console.error(`[Google Sheets API] registrationId=${regId}, participantId=${partId}, sheet=${targetSheetName}, targetRow=UNKNOWN, status=FAILED, error=${errText}`);
+    console.error(`[Google Sheets API] registrationId=${regId}, sheet=${targetSheetName}, status=FAILED, error=${errText}`);
     throw new Error(`Google Sheets fetch failed for range ${targetSheetName}!A1:Z1000 (${getRes.status}): ${errText}`);
   }
 
@@ -166,7 +165,7 @@ export async function syncToGoogleSheetsApi({
 
   if (headers.length === 0) {
     headers = [...REQUIRED_HEADERS];
-    const initUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(targetSheetName)}!A1:J1?valueInputOption=USER_ENTERED`;
+    const initUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(targetSheetName)}!A1:H1?valueInputOption=USER_ENTERED`;
     await fetch(initUrl, {
       method: 'PUT',
       headers: authHeaders,
@@ -184,26 +183,12 @@ export async function syncToGoogleSheetsApi({
   let ynbCol        = findColumnIndex(headers, ['Year / Branch / Section', 'Year / Branch', 'Mobile Number / Year-Branch information', 'Year-Branch information', 'Year & Branch', 'Year and Branch', 'Year-Branch', 'Year/Branch', 'Academic Info', 'Branch', 'Year']);
   let screenshotCol = findColumnIndex(headers, ['Payment Screenshot', 'Screenshot', 'Payment', 'Payment Status', 'Screenshot Link', 'UTR']);
   let regIdCol      = findColumnIndex(headers, ['Registration ID', 'RegistrationID', 'Reg ID', 'RegID']);
-  let partIdCol     = findColumnIndex(headers, ['Participant ID', 'ParticipantID', 'Part ID', 'Participant']);
-  let passwordCol   = findColumnIndex(headers, ['Password', 'Temporary Password', 'Temp Password', 'Password Hash']);
 
   // Ensure Registration ID is mapped (Column H / index 7)
   let headersUpdated = false;
   if (regIdCol === -1) {
     regIdCol = headers.length >= 8 ? 7 : headers.length;
     headers[regIdCol] = 'Registration ID';
-    headersUpdated = true;
-  }
-  // Ensure Column I: Participant ID (immediately after Registration ID)
-  if (partIdCol === -1) {
-    partIdCol = regIdCol + 1;
-    headers[partIdCol] = 'Participant ID';
-    headersUpdated = true;
-  }
-  // Ensure Column J: Password (immediately after Participant ID)
-  if (passwordCol === -1) {
-    passwordCol = partIdCol + 1;
-    headers[passwordCol] = 'Password';
     headersUpdated = true;
   }
 
@@ -219,8 +204,6 @@ export async function syncToGoogleSheetsApi({
 
   const {
     registrationId = regId,
-    participantId = partId,
-    temporaryPassword,
     name,
     rollNumber,
     email,
@@ -263,57 +246,21 @@ export async function syncToGoogleSheetsApi({
     }
   }
 
-  // 5. Update existing row OR append new row
+  // 5. Existing row already recorded or append new row strictly ending at Column H
   if (targetRowIndex !== -1) {
-    // Update Participant ID (Column I) and Password (Column J) on the SAME ROW
-    const partColLetter = columnIndexToLetter(partIdCol);
-    const pwdColLetter = columnIndexToLetter(passwordCol);
-
-    let updateRes;
-    if (partIdCol + 1 === passwordCol) {
-      // Contiguous update range: e.g. I19:J19
-      const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(targetSheetName)}!${partColLetter}${targetRowIndex}:${pwdColLetter}${targetRowIndex}?valueInputOption=USER_ENTERED`;
-      updateRes = await fetch(updateUrl, {
-        method: 'PUT',
-        headers: authHeaders,
-        body: JSON.stringify({
-          values: [[participantId, temporaryPassword]]
-        }),
-      });
-    } else {
-      const batchUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchUpdate`;
-      updateRes = await fetch(batchUrl, {
-        method: 'POST',
-        headers: authHeaders,
-        body: JSON.stringify({
-          valueInputOption: 'USER_ENTERED',
-          data: [
-            { range: `${targetSheetName}!${partColLetter}${targetRowIndex}`, values: [[participantId]] },
-            { range: `${targetSheetName}!${pwdColLetter}${targetRowIndex}`, values: [[temporaryPassword]] },
-          ]
-        }),
-      });
-    }
-
-    if (!updateRes.ok) {
-      const updateErr = await updateRes.text();
-      console.error(`[Google Sheets API] registrationId=${registrationId}, participantId=${participantId}, sheet=${targetSheetName}, targetRow=${targetRowIndex}, status=FAILED, error=${updateErr}`);
-      throw new Error(`Google Sheets update failed (${updateRes.status}): ${updateErr}`);
-    }
-
-    console.log(`[Google Sheets API] registrationId=${registrationId}, participantId=${participantId}, sheet=${targetSheetName}, targetRow=${targetRowIndex}, status=SUCCESS`);
+    console.log(`[Google Sheets API] registrationId=${registrationId}, sheet=${targetSheetName}, targetRow=${targetRowIndex}, status=EXISTING`);
     return {
       success: true,
-      action: 'updated',
+      action: 'existing',
       row: targetRowIndex,
       sheet: targetSheetName,
       registrationId,
-      participantId,
     };
   } else {
-    // Assemble new row strictly aligned to Columns A..J:
-    // [ timestamp, name, rollNumber, email, mobile, yearBranchSection, paymentScreenshot, registrationId, participantId, temporaryPassword ]
-    const maxCols = Math.max(headers.length, 10);
+    // Assemble new row strictly aligned to Columns A..H (Length 8):
+    // [ timestamp, name, rollNumber, email, mobile, yearBranchSection, paymentScreenshot, registrationId ]
+    // Do NOT write anything to columns I or J.
+    const maxCols = Math.max(headers.length, 8);
     const newRow = new Array(maxCols).fill('');
     if (timeCol !== -1)        newRow[timeCol]        = timestamp;
     if (nameCol !== -1)        newRow[nameCol]        = name || '';
@@ -323,10 +270,8 @@ export async function syncToGoogleSheetsApi({
     if (ynbCol !== -1)         newRow[ynbCol]         = yearAndBranch || '';
     if (screenshotCol !== -1)  newRow[screenshotCol]  = paymentScreenshot || 'Paid';
     if (regIdCol !== -1)       newRow[regIdCol]       = registrationId || '';
-    if (partIdCol !== -1)      newRow[partIdCol]      = participantId || '';
-    if (passwordCol !== -1)    newRow[passwordCol]    = temporaryPassword || '';
 
-    // Enforce positional fallback for indices 0..9 if any column was unmapped
+    // Enforce positional fallback for indices 0..7 if any column was unmapped
     if (timeCol === -1)        newRow[0] = timestamp;
     if (nameCol === -1)        newRow[1] = name || '';
     if (rollCol === -1)        newRow[2] = rollNumber || '';
@@ -335,8 +280,11 @@ export async function syncToGoogleSheetsApi({
     if (ynbCol === -1)         newRow[5] = yearAndBranch || '';
     if (screenshotCol === -1)  newRow[6] = paymentScreenshot || 'Paid';
     if (regIdCol === -1)       newRow[7] = registrationId || '';
-    if (partIdCol === -1)      newRow[8] = participantId || '';
-    if (passwordCol === -1)    newRow[9] = temporaryPassword || '';
+
+    // Strictly ensure columns after H (index 7) remain empty if sheet has more columns
+    for (let c = 8; c < newRow.length; c++) {
+      newRow[c] = '';
+    }
 
     const appendUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(targetSheetName)}!A1:append?valueInputOption=USER_ENTERED`;
     const appendRes = await fetch(appendUrl, {
@@ -347,7 +295,7 @@ export async function syncToGoogleSheetsApi({
 
     if (!appendRes.ok) {
       const appendErr = await appendRes.text();
-      console.error(`[Google Sheets API] registrationId=${registrationId}, participantId=${participantId}, sheet=${targetSheetName}, targetRow=NEW, status=FAILED, error=${appendErr}`);
+      console.error(`[Google Sheets API] registrationId=${registrationId}, sheet=${targetSheetName}, targetRow=NEW, status=FAILED, error=${appendErr}`);
       throw new Error(`Google Sheets append failed (${appendRes.status}): ${appendErr}`);
     }
 
@@ -357,7 +305,7 @@ export async function syncToGoogleSheetsApi({
     const matchRow = updatedRange.match(/(\d+)$/);
     if (matchRow) appendedRow = matchRow[1];
 
-    console.log(`[Google Sheets API] registrationId=${registrationId}, participantId=${participantId}, sheet=${targetSheetName}, targetRow=${appendedRow}, status=SUCCESS`);
+    console.log(`[Google Sheets API] registrationId=${registrationId}, sheet=${targetSheetName}, targetRow=${appendedRow}, status=SUCCESS`);
 
     return {
       success: true,
@@ -365,7 +313,6 @@ export async function syncToGoogleSheetsApi({
       row: appendedRow,
       sheet: targetSheetName,
       registrationId,
-      participantId,
     };
   }
 }
@@ -394,7 +341,6 @@ export async function writeCredentialsToGoogleSheet(registrationData) {
       });
     } catch (err) {
       console.error('Google Sheets API direct sync failed:', err.message);
-      // If service account call fails, fall through to try scriptUrl if available
       if (!scriptUrl) {
         return { success: false, error: err.message };
       }
@@ -409,8 +355,6 @@ export async function writeCredentialsToGoogleSheet(registrationData) {
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({
           registrationId: registrationData.registrationId,
-          participantId: registrationData.participantId,
-          temporaryPassword: registrationData.temporaryPassword,
           name: registrationData.name,
           rollNumber: registrationData.rollNumber,
           email: registrationData.email,
@@ -427,25 +371,23 @@ export async function writeCredentialsToGoogleSheet(registrationData) {
       const json = await res.json().catch(() => null);
       const isSuccess = Boolean(res.ok && json?.success);
 
-      // Step 2: Safe debug logging
-      console.log('[STEP 2 api/googleSheets.js DEBUG]', {
+      console.log('[api/googleSheets.js Apps Script Sync]', {
         providerUsed: 'Google Apps Script',
         endpointUsed: scriptUrl.replace(/\/s\/[a-zA-Z0-9_-]+\//, '/s/[DEPLOYMENT_ID]/'),
         registrationId: registrationData.registrationId,
-        participantId: registrationData.participantId,
         resultStatus: isSuccess ? 'SUCCESS' : 'FAILED',
       });
 
       if (isSuccess) {
-        console.log(`[Google Sheets Apps Script] registrationId=${registrationData.registrationId}, participantId=${registrationData.participantId}, sheet=Registrations, targetRow=${json.row || json.action || 'appended'}, status=SUCCESS`);
+        console.log(`[Google Sheets Apps Script] registrationId=${registrationData.registrationId}, sheet=Registrations, targetRow=${json.row || json.action || 'appended'}, status=SUCCESS`);
         return { success: true, via: 'appsScript', ...json };
       } else {
         const errorMsg = json?.message || `Google Apps Script returned status ${res.status}`;
-        console.error(`[Google Sheets Apps Script] registrationId=${registrationData.registrationId}, participantId=${registrationData.participantId}, sheet=Registrations, targetRow=UNKNOWN, status=FAILED, error=${errorMsg}`);
+        console.error(`[Google Sheets Apps Script] registrationId=${registrationData.registrationId}, sheet=Registrations, targetRow=UNKNOWN, status=FAILED, error=${errorMsg}`);
         return { success: false, error: errorMsg };
       }
     } catch (err) {
-      console.error(`[Google Sheets Apps Script] registrationId=${registrationData.registrationId}, participantId=${registrationData.participantId}, sheet=Registrations, targetRow=UNKNOWN, status=FAILED, error=${err.message}`);
+      console.error(`[Google Sheets Apps Script] registrationId=${registrationData.registrationId}, sheet=Registrations, targetRow=UNKNOWN, status=FAILED, error=${err.message}`);
       return { success: false, error: err.message };
     }
   }

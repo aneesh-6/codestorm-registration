@@ -52,9 +52,8 @@ export default function RegistrationSuccessPage({ registrationData, onBack }) {
   };
 
   const handleCopyCredentials = () => {
-    const participantId = data.participantId || 'CS26-0001';
-    const tempPassword = data.temporaryPassword || 'K7mP4xQ9';
-    const textToCopy = `CodeStorm 2026 Login Credentials\n\nParticipant ID: ${participantId}\nTemporary Password: ${tempPassword}`;
+    const regId = data.registrationId || 'CODESTORM-2026-0001';
+    const textToCopy = `CodeStorm 2026 Login Credentials\n\nLogin ID: ${regId}\nPassword: ${regId}\n\nUse your Registration ID as both your Login ID and Password.`;
     
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(textToCopy);
@@ -168,7 +167,7 @@ export default function RegistrationSuccessPage({ registrationData, onBack }) {
               textTransform: 'uppercase',
               marginBottom: '12px'
             }}>
-              YOUR EVENT LOGIN CREDENTIALS
+              LOGIN CREDENTIALS
             </div>
 
             <div style={{
@@ -183,19 +182,19 @@ export default function RegistrationSuccessPage({ registrationData, onBack }) {
             }}>
               <div>
                 <div style={{ fontSize: '0.75rem', color: 'rgba(255, 255, 255, 0.65)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  Participant ID
+                  Login ID
                 </div>
-                <div style={{ fontSize: '1.5rem', fontWeight: 900, fontFamily: 'monospace', color: '#38bdf8', letterSpacing: '0.06em', marginTop: '4px' }}>
-                  {data.participantId || 'CS26-0001'}
+                <div style={{ fontSize: '1.35rem', fontWeight: 900, fontFamily: 'monospace', color: '#38bdf8', letterSpacing: '0.04em', marginTop: '4px' }}>
+                  {data.registrationId}
                 </div>
               </div>
 
               <div>
                 <div style={{ fontSize: '0.75rem', color: 'rgba(255, 255, 255, 0.65)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  Temporary Password
+                  Password
                 </div>
-                <div style={{ fontSize: '1.5rem', fontWeight: 900, fontFamily: 'monospace', color: '#f97316', letterSpacing: '0.06em', marginTop: '4px' }}>
-                  {data.temporaryPassword || 'K7mP4xQ9'}
+                <div style={{ fontSize: '1.35rem', fontWeight: 900, fontFamily: 'monospace', color: '#f97316', letterSpacing: '0.04em', marginTop: '4px' }}>
+                  {data.registrationId}
                 </div>
               </div>
             </div>
@@ -206,13 +205,13 @@ export default function RegistrationSuccessPage({ registrationData, onBack }) {
               gap: '8px',
               fontSize: '0.875rem',
               color: '#fbbf24',
-              fontWeight: 500,
+              fontWeight: 600,
               marginBottom: '20px',
               lineHeight: 1.4
             }}>
-              <span>⚠️</span>
+              <span>ℹ️</span>
               <span>
-                Save these credentials safely. You will need them to access the CodeStorm Event Platform.
+                Use your Registration ID as both your Login ID and Password.
               </span>
             </div>
 
