@@ -305,9 +305,53 @@ function doPost(e) {
 }
 
 /**
- * Handles GET requests - health checking
+ * Handles GET requests - health checking and registration lookup (Columns A through H only)
  */
 function doGet(e) {
+  if (e && e.parameter && (e.parameter.action === "getRegistrations" || e.parameter.action === "lookup")) {
+    try {
+      const ss = getSpreadsheet();
+      const sheet = getRegistrationSheet(ss);
+      const lastRow = sheet.getLastRow();
+      if (lastRow <= 1) {
+        return createJsonResponse({ success: true, count: 0, registrations: [] });
+      }
+      const { headers, colMap } = ensureAndMapHeaders(sheet);
+      // Strictly read Columns A through H (first 8 columns maximum)
+      const maxCol = Math.min(8, sheet.getLastColumn());
+      const data = sheet.getRange(2, 1, lastRow - 1, maxCol).getValues();
+
+      const targetRegId = (e.parameter.registrationId || "").trim().toUpperCase();
+      const registrations = [];
+
+      for (let i = 0; i < data.length; i++) {
+        const row = data[i];
+        const regId = colMap.registrationId ? String(row[colMap.registrationId - 1] || "").trim() : "";
+        if (!regId) continue;
+        if (targetRegId && regId.toUpperCase() !== targetRegId) continue;
+
+        registrations.push({
+          row: i + 2,
+          timestamp: colMap.timestamp ? row[colMap.timestamp - 1] : "",
+          name: colMap.name ? row[colMap.name - 1] : "",
+          rollNumber: colMap.rollNumber ? row[colMap.rollNumber - 1] : "",
+          email: colMap.email ? row[colMap.email - 1] : "",
+          mobile: colMap.mobile ? row[colMap.mobile - 1] : "",
+          yearAndBranch: colMap.yearAndBranch ? row[colMap.yearAndBranch - 1] : "",
+          registrationId: regId,
+        });
+      }
+
+      return createJsonResponse({
+        success: true,
+        count: registrations.length,
+        registrations: registrations
+      });
+    } catch (err) {
+      return createJsonResponse({ success: false, error: err.message });
+    }
+  }
+
   return createJsonResponse({
     status: "online",
     service: "CODESTORM 2026 Google Sheets Registration API",
