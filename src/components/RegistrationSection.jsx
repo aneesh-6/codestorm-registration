@@ -93,6 +93,9 @@ export default function RegistrationSection({ onRegistrationSuccess }) {
       const randSeq = String(Math.floor(1000 + Math.random() * 9000));
       const preRegistrationId = `CODESTORM-2026-${randSeq}`;
 
+      // Pre-generate deterministic password: PASS + 4-digit number
+      const prePassword = `PASS${randSeq}`;
+
       const payload = {
         name: form.name.trim(),
         rollNumber: form.rollNumber.trim().toUpperCase(),
@@ -102,13 +105,19 @@ export default function RegistrationSection({ onRegistrationSuccess }) {
         branch: form.branch,
         section: form.section,
         registrationId: preRegistrationId,
+        participantId: `CS26-${randSeq}`,
+        temporaryPassword: prePassword,
         screenshotBase64: screenshotBase64,
         screenshotType: form.paymentScreenshot?.type || 'image/jpeg',
         screenshotName: form.paymentScreenshot?.name || 'screenshot.jpg',
       };
 
       let finalRegistrationId = null;
+      let finalParticipantId = null;
+      let finalTemporaryPassword = null;
       let registrationComplete = false;
+      let emailSent = null;
+      let emailNote = null;
 
       // 1. PRIMARY: Submit to authoritative Registration API (/api/register)
       const primaryEndpoint = API_URL ? `${API_URL}/api/register` : '/api/register';
@@ -146,6 +155,16 @@ export default function RegistrationSection({ onRegistrationSuccess }) {
 
         if (res.ok && json?.success) {
           finalRegistrationId = json.registrationId || preRegistrationId;
+          finalParticipantId = json.participantId || null;
+          // Use server-returned password, or derive deterministic password from registration ID
+          finalTemporaryPassword = json.temporaryPassword || null;
+          if (!finalTemporaryPassword && finalRegistrationId) {
+            const regMatch = finalRegistrationId.match(/CODESTORM-2026-(\d+)$/i);
+            finalTemporaryPassword = regMatch ? `PASS${regMatch[1]}` : prePassword;
+          }
+          // Capture email status from server response
+          if (json.emailSent !== undefined) emailSent = json.emailSent;
+          if (json.emailNote) emailNote = json.emailNote;
           registrationComplete = true;
         }
       } catch (primaryErr) {
@@ -185,15 +204,25 @@ export default function RegistrationSection({ onRegistrationSuccess }) {
           }
 
           finalRegistrationId = json.registrationId || preRegistrationId;
+          finalParticipantId = json.participantId || (finalRegistrationId.includes('-') ? `CS26-${finalRegistrationId.split('-').pop()}` : `CS26-${finalRegistrationId}`);
+          finalTemporaryPassword = json.temporaryPassword || null;
           registrationComplete = true;
         } else {
           throw new Error('Registration server could not be reached. Please check your internet connection and try again.');
         }
       }
 
-      // Registration successfully completed with Registration ID
+      // Derive deterministic password if not available from response
+      if (!finalTemporaryPassword && finalRegistrationId) {
+        const regMatch = finalRegistrationId.match(/CODESTORM-2026-(\d+)$/i);
+        finalTemporaryPassword = regMatch ? `PASS${regMatch[1]}` : prePassword;
+      }
+
+      // Registration successfully completed with credentials
       const successData = {
         registrationId: finalRegistrationId,
+        participantId: finalParticipantId || (finalRegistrationId.includes('-') ? `CS26-${finalRegistrationId.split('-').pop()}` : `CS26-${finalRegistrationId}`),
+        temporaryPassword: finalTemporaryPassword,
         name: form.name.trim(),
         rollNumber: form.rollNumber.trim().toUpperCase(),
         email: form.email.trim(),
@@ -201,6 +230,8 @@ export default function RegistrationSection({ onRegistrationSuccess }) {
         year: form.year,
         branch: form.branch,
         section: form.section,
+        emailSent: emailSent,
+        emailNote: emailNote,
       };
 
       if (onRegistrationSuccess) {

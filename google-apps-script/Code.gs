@@ -3,7 +3,7 @@
  * CODESTORM 2026 - GOOGLE SHEETS & DRIVE REGISTRATION BACKEND
  * ============================================================================
  *
- * Registration Columns (Columns A through H):
+ * Registration Columns (Columns A through J):
  * A: Timestamp
  * B: Name
  * C: Roll Number
@@ -12,10 +12,16 @@
  * F: Year & Branch
  * G: Payment Screenshot
  * H: Registration ID
+ * I: Participant ID
+ * J: Temporary Password
  *
- * Authentication Note:
- * Registration ID itself serves as the participant's Login ID and Password.
- * No Participant ID or Password columns are generated or stored in Google Sheets.
+ * Credentials Architecture:
+ * - Registration ID: Permanent unique link (e.g. CODESTORM-2026-0001)
+ * - Participant ID: Derived sequence identifier (e.g. CS26-0001)
+ * - Temporary Password: 8-character secure credential
+ *
+ * Organizer Google Sheet:
+ * Columns H, I, J on the SAME row store Registration ID | Participant ID | Temporary Password.
  */
 
 // ============================================================================
@@ -29,7 +35,7 @@ const ID_PREFIX = "CODESTORM-2026-";
 const TIMEZONE = "Asia/Kolkata";
 
 /**
- * Production Sheet Columns (Columns A through H):
+ * Production Sheet Columns (Columns A through J):
  */
 const REQUIRED_HEADERS = [
   "Timestamp",          // A (1)
@@ -39,7 +45,9 @@ const REQUIRED_HEADERS = [
   "Mobile Number",      // E (5)
   "Year & Branch",      // F (6)
   "Payment Screenshot", // G (7)
-  "Registration ID"     // H (8)
+  "Registration ID",    // H (8)
+  "Participant ID",     // I (9)
+  "Temporary Password"  // J (10)
 ];
 
 /**
@@ -138,8 +146,117 @@ function doPost(e) {
       });
     }
 
+    // 2.1 Handle sendCredentialEmail action - send credential email via MailApp
+    if (data && data.action === "sendCredentialEmail") {
+      try {
+        var recipientName = (data.name || "Participant").trim();
+        var recipientEmail = (data.email || "").trim();
+        var regId = (data.registrationId || "").trim();
+        var partId = (data.participantId || "").trim();
+        var pwd = (data.password || "").trim();
+        var platformUrl = (data.eventPlatformUrl || "https://codestorm-event-platform.onrender.com").trim();
+
+        if (!recipientEmail || !recipientEmail.includes("@")) {
+          return createJsonResponse({ success: false, message: "Invalid email address for credential email." });
+        }
+
+        var subject = "CodeStorm 2026 - Registration Successful";
+
+        var htmlBody = '<div style="font-family: \'Segoe UI\', Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #0f172a; color: #e2e8f0; border-radius: 12px; overflow: hidden;">'
+          + '<div style="background: linear-gradient(135deg, #1e3a5f 0%, #0f172a 100%); padding: 32px 24px; text-align: center;">'
+          + '<h1 style="margin: 0 0 8px 0; font-size: 28px; font-weight: 800; color: #f97316; letter-spacing: 1px;">CODESTORM 2026</h1>'
+          + '<p style="margin: 0; color: #94a3b8; font-size: 14px;">Registration Successful</p>'
+          + '</div>'
+          + '<div style="padding: 28px 24px;">'
+          + '<p style="font-size: 16px; margin: 0 0 20px 0; color: #e2e8f0;">Hello <strong>' + recipientName + '</strong>,</p>'
+          + '<p style="font-size: 15px; margin: 0 0 24px 0; color: #cbd5e1;">Your registration for CodeStorm 2026 has been successfully completed.</p>'
+          + '<div style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; padding: 20px; margin: 0 0 20px 0;">'
+          + '<table style="width: 100%; border-collapse: collapse;">'
+          + '<tr><td style="padding: 8px 0; color: #94a3b8; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Registration ID</td></tr>'
+          + '<tr><td style="padding: 0 0 16px 0; color: #f1f5f9; font-size: 18px; font-weight: 700; font-family: monospace;">' + regId + '</td></tr>'
+          + '<tr><td style="padding: 8px 0; color: #94a3b8; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Participant ID</td></tr>'
+          + '<tr><td style="padding: 0 0 16px 0; color: #38bdf8; font-size: 18px; font-weight: 700; font-family: monospace;">' + partId + '</td></tr>'
+          + '<tr><td style="padding: 8px 0; color: #94a3b8; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Password</td></tr>'
+          + '<tr><td style="padding: 0 0 8px 0; color: #4ade80; font-size: 18px; font-weight: 700; font-family: monospace; letter-spacing: 1px;">' + pwd + '</td></tr>'
+          + '</table>'
+          + '</div>'
+          + '<div style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 14px 16px; margin: 0 0 20px 0;">'
+          + '<p style="margin: 0 0 8px 0; color: #94a3b8; font-size: 13px; font-weight: 600; text-transform: uppercase;">Event Platform</p>'
+          + '<a href="' + platformUrl + '" style="color: #38bdf8; font-size: 15px; font-weight: 600; text-decoration: none;">' + platformUrl + '</a>'
+          + '</div>'
+          + '<p style="font-size: 14px; color: #fbbf24; font-weight: 600; margin: 0 0 20px 0;">Please keep these credentials safe. You will use the Participant ID and Password to log in to the CodeStorm Event Platform.</p>'
+          + '<p style="font-size: 14px; color: #94a3b8; margin: 0;">Regards,<br/><strong style="color: #e2e8f0;">CodeStorm 2026 Team</strong></p>'
+          + '</div>'
+          + '<div style="background: rgba(0,0,0,0.3); padding: 16px 24px; text-align: center;">'
+          + '<p style="margin: 0; color: #64748b; font-size: 12px;">Department of CSE \u2013 Data Science \u2022 Malla Reddy Engineering College and Management Sciences</p>'
+          + '</div>'
+          + '</div>';
+
+        var plainBody = "Hello " + recipientName + ",\n\n"
+          + "Your registration for CodeStorm 2026 has been successfully completed.\n\n"
+          + "Registration ID:\n" + regId + "\n\n"
+          + "Participant ID:\n" + partId + "\n\n"
+          + "Password:\n" + pwd + "\n\n"
+          + "Event Platform:\n" + platformUrl + "\n\n"
+          + "Please keep these credentials safe. You will use the Participant ID and Password to log in to the CodeStorm Event Platform.\n\n"
+          + "Regards,\nCodeStorm 2026 Team";
+
+        MailApp.sendEmail({
+          to: recipientEmail,
+          subject: subject,
+          body: plainBody,
+          htmlBody: htmlBody,
+          name: "CodeStorm 2026"
+        });
+
+        Logger.log("Credential email sent to: " + recipientEmail + " for " + regId);
+        return createJsonResponse({ success: true, message: "Credential email sent to " + recipientEmail });
+      } catch (emailErr) {
+        Logger.log("Email send error: " + emailErr.message);
+        return createJsonResponse({ success: false, message: "Failed to send email: " + emailErr.message });
+      }
+    }
+
     // 3. Ensure Columns A..H exist and get dynamic column mappings
     const { headers, colMap } = ensureAndMapHeaders(sheet);
+
+    // 3.1 Handle getRegistrations / lookup / getAll via POST
+    if (data && (data.action === "getRegistrations" || data.action === "lookup" || data.action === "getAll" || data.action === "sync")) {
+      const lastRow = sheet.getLastRow();
+      if (lastRow <= 1) {
+        return createJsonResponse({ success: true, count: 0, registrations: [] });
+      }
+      const maxCol = Math.min(10, sheet.getLastColumn());
+      const rawData = sheet.getRange(2, 1, lastRow - 1, maxCol).getValues();
+      const targetRegId = (data.registrationId || "").trim().toUpperCase();
+      const registrations = [];
+
+      for (let i = 0; i < rawData.length; i++) {
+        const row = rawData[i];
+        const regId = colMap.registrationId ? String(row[colMap.registrationId - 1] || "").trim() : "";
+        if (!regId) continue;
+        if (targetRegId && regId.toUpperCase() !== targetRegId) continue;
+
+        registrations.push({
+          row: i + 2,
+          timestamp: colMap.timestamp ? row[colMap.timestamp - 1] : "",
+          name: colMap.name ? row[colMap.name - 1] : "",
+          rollNumber: colMap.rollNumber ? row[colMap.rollNumber - 1] : "",
+          email: colMap.email ? row[colMap.email - 1] : "",
+          mobile: colMap.mobile ? row[colMap.mobile - 1] : "",
+          yearAndBranch: colMap.yearAndBranch ? row[colMap.yearAndBranch - 1] : "",
+          registrationId: regId,
+          participantId: colMap.participantId ? String(row[colMap.participantId - 1] || "").trim() : "",
+          temporaryPassword: colMap.temporaryPassword ? String(row[colMap.temporaryPassword - 1] || "").trim() : "",
+        });
+      }
+
+      return createJsonResponse({
+        success: true,
+        count: registrations.length,
+        registrations: registrations
+      });
+    }
 
     // 4. Validate Required Registration Fields
     const name          = (data.name || "").trim();
@@ -167,10 +284,21 @@ function doPost(e) {
       const providedRegId = String(data.registrationId).trim().toUpperCase();
       const existingRowById = findRowByRegistrationId(sheet, providedRegId, colMap.registrationId);
       if (existingRowById !== -1) {
+        if (data.participantId && colMap.participantId) {
+          sheet.getRange(existingRowById, colMap.participantId).setValue(String(data.participantId).trim());
+        }
+        if ((data.temporaryPassword || data.password) && colMap.temporaryPassword) {
+          sheet.getRange(existingRowById, colMap.temporaryPassword).setValue(String(data.temporaryPassword || data.password).trim());
+        }
+        const match = providedRegId.match(/^CODESTORM-2026-(\d+)$/i);
+        const resolvedPartId = data.participantId || (match ? ("CS26-" + match[1]) : ("CS26-" + providedRegId.slice(-4)));
+        const resolvedPass = (data.temporaryPassword || data.password || (match ? ("PASS" + match[1]) : ("PASS" + providedRegId.slice(-4)))).trim();
         Logger.log("registrationId=" + providedRegId + ", sheet=" + sheet.getName() + ", targetRow=" + existingRowById + ", status=EXISTING");
         return createJsonResponse({
           success: true,
           registrationId: providedRegId,
+          participantId: resolvedPartId,
+          temporaryPassword: resolvedPass,
           message: "Registration already recorded."
         });
       }
@@ -189,8 +317,18 @@ function doPost(e) {
       });
     }
 
-    // 6. Generate or use sequential Registration ID
+    // 6. Generate or use sequential Registration ID and Participant ID
     const registrationId = data.registrationId || generateNextRegistrationId(sheet, colMap.registrationId);
+    let participantId = (data.participantId || "").trim();
+    if (!participantId) {
+      const match = registrationId.match(/^CODESTORM-2026-(\d+)$/i);
+      participantId = match ? ("CS26-" + match[1]) : ("CS26-" + registrationId.slice(-4));
+    }
+    let temporaryPassword = (data.temporaryPassword || data.password || "").trim();
+    if (!temporaryPassword) {
+      const match = registrationId.match(/^CODESTORM-2026-(\d+)$/i);
+      temporaryPassword = match ? ("PASS" + match[1]) : ("PASS" + registrationId.slice(-4));
+    }
 
     // 7. Store Payment Screenshot in Google Drive (if folder configured and base64 provided)
     let screenshotUrl = "";
@@ -241,8 +379,9 @@ function doPost(e) {
       ? (section ? `${year} - ${branch} (${section})` : `${year} - ${branch}`)
       : (data.yearAndBranch || year || branch || "CSE");
 
-    // 9. Build Row Array strictly matching Columns A through H (Length 8)
-    const maxCols = Math.max(sheet.getLastColumn(), 8);
+    // 9. Build Row Array matching Columns A through J (Length 10)
+    // Columns H, I, J on the SAME row: Registration ID | Participant ID | Temporary Password
+    const maxCols = Math.max(sheet.getLastColumn(), 10);
     const newRow = new Array(maxCols).fill("");
 
     if (colMap.timestamp)         newRow[colMap.timestamp - 1]         = formattedTimestamp;
@@ -253,8 +392,10 @@ function doPost(e) {
     if (colMap.yearAndBranch)      newRow[colMap.yearAndBranch - 1]      = yearAndBranch;
     if (colMap.paymentScreenshot)  newRow[colMap.paymentScreenshot - 1]  = screenshotFormula || "Paid";
     if (colMap.registrationId)     newRow[colMap.registrationId - 1]     = registrationId;
+    if (colMap.participantId)      newRow[colMap.participantId - 1]      = participantId;
+    if (colMap.temporaryPassword)  newRow[colMap.temporaryPassword - 1]  = temporaryPassword;
 
-    // Guaranteed positional fallbacks for standard columns A..H (indices 0..7)
+    // Guaranteed positional fallbacks for standard columns A..J (indices 0..9)
     if (!colMap.timestamp && newRow[0] === "")         newRow[0] = formattedTimestamp;
     if (!colMap.name && newRow[1] === "")              newRow[1] = name;
     if (!colMap.rollNumber && newRow[2] === "")        newRow[2] = rollNumber;
@@ -263,12 +404,14 @@ function doPost(e) {
     if (!colMap.yearAndBranch && newRow[5] === "")     newRow[5] = yearAndBranch;
     if (!colMap.paymentScreenshot && newRow[6] === "") newRow[6] = screenshotFormula || "Paid";
     if (!colMap.registrationId && newRow[7] === "")    newRow[7] = registrationId;
+    if (!colMap.participantId && newRow[8] === "")     newRow[8] = participantId;
+    if (!colMap.temporaryPassword && newRow[9] === "") newRow[9] = temporaryPassword;
 
-    // 10. Append Registration Row (Stops strictly at Registration ID / Col H)
+    // 10. Append Registration Row (All columns on the SAME row)
     sheet.appendRow(newRow);
 
     const targetRowIndex = sheet.getLastRow();
-    const newRange = sheet.getRange(targetRowIndex, 1, 1, 8);
+    const newRange = sheet.getRange(targetRowIndex, 1, 1, 10);
     newRange.setVerticalAlignment("middle");
 
     // Center identifiers, codes, and links
@@ -277,14 +420,18 @@ function doPost(e) {
     if (colMap.mobile)             sheet.getRange(targetRowIndex, colMap.mobile).setHorizontalAlignment("center");
     if (colMap.paymentScreenshot)  sheet.getRange(targetRowIndex, colMap.paymentScreenshot).setHorizontalAlignment("center");
     if (colMap.registrationId)     sheet.getRange(targetRowIndex, colMap.registrationId).setHorizontalAlignment("center");
+    if (colMap.participantId)      sheet.getRange(targetRowIndex, colMap.participantId).setHorizontalAlignment("center");
+    if (colMap.temporaryPassword)  sheet.getRange(targetRowIndex, colMap.temporaryPassword).setHorizontalAlignment("center");
 
     // Server-side debug log containing ONLY registrationId, sheet, targetRow, status
     Logger.log("registrationId=" + registrationId + ", sheet=" + sheet.getName() + ", targetRow=" + targetRowIndex + ", status=SUCCESS");
 
-    // 11. Return JSON Success Response with Registration ID ONLY
+    // 11. Return JSON Success Response with Registration ID, Participant ID, and Temporary Password
     return createJsonResponse({
       success: true,
       registrationId: registrationId,
+      participantId: participantId,
+      temporaryPassword: temporaryPassword,
       name: name,
       email: email,
       rollNumber: rollNumber,
@@ -305,7 +452,7 @@ function doPost(e) {
 }
 
 /**
- * Handles GET requests - health checking and registration lookup (Columns A through H only)
+ * Handles GET requests - health checking and registration lookup (Columns A through J)
  */
 function doGet(e) {
   if (e && e.parameter && (e.parameter.action === "getRegistrations" || e.parameter.action === "lookup")) {
@@ -317,8 +464,8 @@ function doGet(e) {
         return createJsonResponse({ success: true, count: 0, registrations: [] });
       }
       const { headers, colMap } = ensureAndMapHeaders(sheet);
-      // Strictly read Columns A through H (first 8 columns maximum)
-      const maxCol = Math.min(8, sheet.getLastColumn());
+      // Read Columns A through J (10 columns maximum)
+      const maxCol = Math.min(10, sheet.getLastColumn());
       const data = sheet.getRange(2, 1, lastRow - 1, maxCol).getValues();
 
       const targetRegId = (e.parameter.registrationId || "").trim().toUpperCase();
@@ -339,6 +486,8 @@ function doGet(e) {
           mobile: colMap.mobile ? row[colMap.mobile - 1] : "",
           yearAndBranch: colMap.yearAndBranch ? row[colMap.yearAndBranch - 1] : "",
           registrationId: regId,
+          participantId: colMap.participantId ? String(row[colMap.participantId - 1] || "").trim() : "",
+          temporaryPassword: colMap.temporaryPassword ? String(row[colMap.temporaryPassword - 1] || "").trim() : "",
         });
       }
 
@@ -369,7 +518,7 @@ function ensureAndMapHeaders(sheet) {
   const lastRow = sheet.getLastRow();
   let lastCol = Math.max(1, sheet.getLastColumn());
 
-  // If sheet is completely empty, initialize default columns A..H
+  // If sheet is completely empty, initialize default columns A..J
   if (lastRow === 0) {
     sheet.appendRow(REQUIRED_HEADERS);
     formatHeaderRow(sheet, REQUIRED_HEADERS.length);
@@ -399,7 +548,9 @@ function ensureAndMapHeaders(sheet) {
     mobile:             findCol(["Mobile Number", "Mobile", "Phone Number", "Phone", "Contact Number"]),
     yearAndBranch:      findCol(["Mobile Number / Year-Branch information", "Year-Branch information", "Year & Branch", "Year and Branch", "Year-Branch", "Year/Branch", "Academic Info", "Branch", "Year"]),
     paymentScreenshot:  findCol(["Payment Screenshot", "Screenshot", "Payment", "Payment Status", "Screenshot Link", "UTR"]),
-    registrationId:     findCol(["Registration ID", "RegistrationID", "Reg ID", "RegID"])
+    registrationId:     findCol(["Registration ID", "RegistrationID", "Reg ID", "RegID"]),
+    participantId:      findCol(["Participant ID", "ParticipantID", "Part ID", "PID"]),
+    temporaryPassword:  findCol(["Temporary Password", "Temp Password", "Password", "Pass"])
   };
 
   // If Registration ID column is missing, add it (Column H / 8)
@@ -410,6 +561,26 @@ function ensureAndMapHeaders(sheet) {
     sheet.setColumnWidth(newCol, 200);
     headers[newCol - 1] = "Registration ID";
     colMap.registrationId = newCol;
+  }
+
+  // If Participant ID column is missing, add it (Column I / 9)
+  if (!colMap.participantId) {
+    const newCol = Math.max(9, sheet.getLastColumn() + 1);
+    sheet.getRange(1, newCol).setValue("Participant ID");
+    styleHeaderCell(sheet, newCol);
+    sheet.setColumnWidth(newCol, 150);
+    headers[newCol - 1] = "Participant ID";
+    colMap.participantId = newCol;
+  }
+
+  // If Temporary Password column is missing, add it (Column J / 10)
+  if (!colMap.temporaryPassword) {
+    const newCol = Math.max(10, sheet.getLastColumn() + 1);
+    sheet.getRange(1, newCol).setValue("Temporary Password");
+    styleHeaderCell(sheet, newCol);
+    sheet.setColumnWidth(newCol, 160);
+    headers[newCol - 1] = "Temporary Password";
+    colMap.temporaryPassword = newCol;
   }
 
   return { headers, colMap };
@@ -443,6 +614,8 @@ function formatHeaderRow(sheet, totalCols) {
   sheet.setColumnWidth(6, 200); // Year & Branch (F)
   sheet.setColumnWidth(7, 180); // Payment Screenshot (G)
   sheet.setColumnWidth(8, 200); // Registration ID (H)
+  sheet.setColumnWidth(9, 150); // Participant ID (I)
+  sheet.setColumnWidth(10, 160); // Temporary Password (J)
 }
 
 function findRowByRegistrationId(sheet, registrationId, regCol) {
@@ -526,4 +699,64 @@ function setupSheet() {
   ensureAndMapHeaders(sheet);
   formatHeaderRow(sheet, REQUIRED_HEADERS.length);
   Logger.log("✅ Google Sheet initialized and formatted successfully on tab: '" + sheet.getName() + "' with Columns A through H!");
+}
+
+/**
+ * Syncs all registrations from this sheet to the Event Platform server.
+ * Can be run manually from the Apps Script editor or via the Sheet menu.
+ */
+function syncAllToEventPlatform() {
+  const ss = getSpreadsheet();
+  const sheet = getRegistrationSheet(ss);
+  const lastRow = sheet.getLastRow();
+  if (lastRow <= 1) {
+    Logger.log("No registrations found to sync.");
+    return;
+  }
+  const { colMap } = ensureAndMapHeaders(sheet);
+  const maxCol = Math.min(8, sheet.getLastColumn());
+  const rawData = sheet.getRange(2, 1, lastRow - 1, maxCol).getValues();
+  const registrations = [];
+
+  for (let i = 0; i < rawData.length; i++) {
+    const row = rawData[i];
+    const regId = colMap.registrationId ? String(row[colMap.registrationId - 1] || "").trim() : "";
+    if (!regId) continue;
+    registrations.push({
+      timestamp: colMap.timestamp ? row[colMap.timestamp - 1] : "",
+      name: colMap.name ? row[colMap.name - 1] : "",
+      rollNumber: colMap.rollNumber ? row[colMap.rollNumber - 1] : "",
+      email: colMap.email ? row[colMap.email - 1] : "",
+      mobile: colMap.mobile ? row[colMap.mobile - 1] : "",
+      yearAndBranch: colMap.yearAndBranch ? row[colMap.yearAndBranch - 1] : "",
+      registrationId: regId,
+    });
+  }
+
+  Logger.log("Found " + registrations.length + " registrations to sync to Event Platform.");
+
+  const eventPlatformUrl = "http://localhost:5000";
+  try {
+    const options = {
+      method: "post",
+      contentType: "application/json",
+      payload: JSON.stringify({ registrations: registrations }),
+      muteHttpExceptions: true
+    };
+    const response = UrlFetchApp.fetch(eventPlatformUrl + "/api/admin/sync-registrations", options);
+    Logger.log("Event Platform Sync Response: " + response.getContentText());
+  } catch (err) {
+    Logger.log("Note: Could not reach localhost directly from Google Cloud (expected if local). Response / Error: " + err.message);
+  }
+}
+
+/**
+ * Creates custom menu in Google Sheets
+ */
+function onOpen() {
+  SpreadsheetApp.getUi()
+    .createMenu("CodeStorm")
+    .addItem("Sync to Event Platform", "syncAllToEventPlatform")
+    .addItem("Setup & Format Sheet", "setupSheet")
+    .addToUi();
 }

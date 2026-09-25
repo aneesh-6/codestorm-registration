@@ -27,7 +27,7 @@ export const WHATSAPP_GROUP_LINK = EVENT_CONFIG.whatsappGroupLink;
  */
 export const GOOGLE_SCRIPT_URL =
   import.meta.env.VITE_GOOGLE_SCRIPT_URL ||
-  "https://script.google.com/macros/s/AKfycbzimvHGfplmvIIrU9D7AZJHKXXYARvhP4H5IRRXmavv339DtXs2OnjQhXJcBh1Ub8By/exec";
+  "https://script.google.com/macros/s/AKfycbyU3tUtbG6bzxDUAnOYjdUcC-FbPPDrv6Z9jG0XsxIeF8ZKO4oiD3zWW3HyCBv8cz-F/exec";
 
 /**
  * Returns true if the Google Apps Script Web App URL is properly configured.

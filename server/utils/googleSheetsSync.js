@@ -22,7 +22,9 @@ const REQUIRED_HEADERS = [
   'Mobile Number',              // E (0-based: 4)
   'Year / Branch / Section',    // F (0-based: 5)
   'Payment Screenshot',         // G (0-based: 6)
-  'Registration ID'             // H (0-based: 7)
+  'Registration ID',            // H (0-based: 7)
+  'Participant ID',             // I (0-based: 8)
+  'Temporary Password'          // J (0-based: 9)
 ];
 
 function createServiceAccountJwt(clientEmail, privateKey) {
@@ -164,7 +166,6 @@ async function syncToGoogleSheetsApi({
     rows = [headers];
   }
 
-  // 3. Identify column mappings dynamically
   let timeCol       = findColumnIndex(headers, ['Timestamp', 'Registered Date', 'Date', 'Created At', 'Time']);
   let nameCol       = findColumnIndex(headers, ['Name', 'Full Name', 'Participant Name', 'Student Name']);
   let rollCol       = findColumnIndex(headers, ['Roll Number', 'Roll No', 'Roll', 'Student ID', 'RollNumber', 'HT No']);
@@ -173,12 +174,24 @@ async function syncToGoogleSheetsApi({
   let ynbCol        = findColumnIndex(headers, ['Year / Branch / Section', 'Year / Branch', 'Mobile Number / Year-Branch information', 'Year-Branch information', 'Year & Branch', 'Year and Branch', 'Year-Branch', 'Year/Branch', 'Academic Info', 'Branch', 'Year']);
   let screenshotCol = findColumnIndex(headers, ['Payment Screenshot', 'Screenshot', 'Payment', 'Payment Status', 'Screenshot Link', 'UTR']);
   let regIdCol      = findColumnIndex(headers, ['Registration ID', 'RegistrationID', 'Reg ID', 'RegID']);
+  let partIdCol     = findColumnIndex(headers, ['Participant ID', 'ParticipantID', 'Part ID', 'PartID']);
+  let pwdCol        = findColumnIndex(headers, ['Temporary Password', 'Temp Password', 'Password', 'Pass']);
 
-  // Ensure Registration ID exists (Column H)
+  // Ensure Registration ID, Participant ID, and Password columns exist
   let headersUpdated = false;
   if (regIdCol === -1) {
     regIdCol = headers.length >= 8 ? 7 : headers.length;
     headers[regIdCol] = 'Registration ID';
+    headersUpdated = true;
+  }
+  if (partIdCol === -1) {
+    partIdCol = headers.length >= 9 ? 8 : headers.length;
+    headers[partIdCol] = 'Participant ID';
+    headersUpdated = true;
+  }
+  if (pwdCol === -1) {
+    pwdCol = headers.length >= 10 ? 9 : headers.length;
+    headers[pwdCol] = 'Temporary Password';
     headersUpdated = true;
   }
 
@@ -194,6 +207,8 @@ async function syncToGoogleSheetsApi({
 
   const {
     registrationId = regId,
+    participantId = '',
+    temporaryPassword = '',
     name,
     rollNumber,
     email,
@@ -205,6 +220,20 @@ async function syncToGoogleSheetsApi({
     paymentScreenshot = 'Paid',
     timestamp = new Date().toISOString().replace('T', ' ').substring(0, 19),
   } = registrationData;
+
+  let finalPartId = participantId;
+  let finalTempPwd = temporaryPassword || registrationData.password || '';
+
+  if (!finalPartId && (registrationId || regId)) {
+    const regStr = String(registrationId || regId);
+    const match = regStr.match(/^CODESTORM-2026-(\d+)$/i);
+    finalPartId = match ? `CS26-${match[1]}` : `CS26-${regStr.replace(/\D/g, '').slice(-4).padStart(4, '0')}`;
+  }
+  if (!finalTempPwd && (registrationId || regId)) {
+    const regStr = String(registrationId || regId);
+    const match = regStr.match(/^CODESTORM-2026-(\d+)$/i);
+    finalTempPwd = match ? `PASS${match[1]}` : `PASS${regStr.replace(/\D/g, '').slice(-4).padStart(4, '0')}`;
+  }
 
   // 4. Search for existing row by Registration ID (Column H / regIdCol)
   let targetRowIndex = -1;
@@ -247,8 +276,8 @@ async function syncToGoogleSheetsApi({
       registrationId,
     };
   } else {
-    // Assemble new row strictly aligned to Columns A..H (Length 8)
-    const maxCols = Math.max(headers.length, 8);
+    // Assemble new row strictly aligned to Columns A..J (Length 10)
+    const maxCols = Math.max(headers.length, 10);
     const newRow = new Array(maxCols).fill('');
     if (timeCol !== -1)        newRow[timeCol]        = timestamp;
     if (nameCol !== -1)        newRow[nameCol]        = name || '';
@@ -258,8 +287,10 @@ async function syncToGoogleSheetsApi({
     if (ynbCol !== -1)         newRow[ynbCol]         = yearAndBranch || '';
     if (screenshotCol !== -1)  newRow[screenshotCol]  = paymentScreenshot || 'Paid';
     if (regIdCol !== -1)       newRow[regIdCol]       = registrationId || '';
+    if (partIdCol !== -1)      newRow[partIdCol]      = finalPartId || '';
+    if (pwdCol !== -1)         newRow[pwdCol]         = finalTempPwd || '';
 
-    // Positional fallback for indices 0..7 if unmapped
+    // Positional fallback for indices 0..9 if unmapped
     if (timeCol === -1)        newRow[0] = timestamp;
     if (nameCol === -1)        newRow[1] = name || '';
     if (rollCol === -1)        newRow[2] = rollNumber || '';
@@ -268,11 +299,8 @@ async function syncToGoogleSheetsApi({
     if (ynbCol === -1)         newRow[5] = yearAndBranch || '';
     if (screenshotCol === -1)  newRow[6] = paymentScreenshot || 'Paid';
     if (regIdCol === -1)       newRow[7] = registrationId || '';
-
-    // Strictly ensure columns after H (index 7) remain empty
-    for (let c = 8; c < newRow.length; c++) {
-      newRow[c] = '';
-    }
+    if (partIdCol === -1)      newRow[8] = finalPartId || '';
+    if (pwdCol === -1)         newRow[9] = finalTempPwd || '';
 
     const appendUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(targetSheetName)}!A1:append?valueInputOption=USER_ENTERED`;
     const appendRes = await fetch(appendUrl, {
@@ -339,6 +367,8 @@ async function writeCredentialsToGoogleSheet(registrationData) {
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({
           registrationId: registrationData.registrationId,
+          participantId: registrationData.participantId,
+          temporaryPassword: registrationData.temporaryPassword,
           name: registrationData.name,
           rollNumber: registrationData.rollNumber,
           email: registrationData.email,

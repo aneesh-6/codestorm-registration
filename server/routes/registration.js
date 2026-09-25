@@ -72,17 +72,20 @@ router.post('/register', handleUpload, async (req, res) => {
       if (dupTxn) return res.status(409).json({ success: false, message: 'This transaction ID has already been used.' });
     }
 
-    // --- Generate or reuse unique Registration ID ---
+    // --- Generate or reuse unique Registration ID, Participant ID, and deterministic Password ---
     const registrationId = providedRegId || await generateUniqueRegistrationId(Registration);
+    const regMatch = registrationId.match(/^CODESTORM-2026-(\d+)$/i);
+    const participantId = req.body.participantId || (regMatch ? `CS26-${regMatch[1]}` : `CS26-${registrationId.slice(-4)}`);
+    const temporaryPassword = (req.body.temporaryPassword || req.body.password || (regMatch ? `PASS${regMatch[1]}` : `PASS${registrationId.slice(-4)}`)).trim();
 
-    // --- Hash Registration ID as password ---
+    // --- Hash Password (PASSXXXX) ---
     const salt = bcrypt ? bcrypt.genSaltSync(10) : '$2b$10$abcdefghijklmnopqrstuu';
-    const passwordHash = bcrypt ? bcrypt.hashSync(registrationId, salt) : registrationId;
+    const passwordHash = bcrypt ? bcrypt.hashSync(temporaryPassword, salt) : temporaryPassword;
 
     // --- Save registration ---
     const reg = new Registration({
       registrationId,
-      participantId: registrationId,
+      participantId,
       passwordHash,
       role: 'participant',
       mustChangePassword: false,
@@ -105,7 +108,7 @@ router.post('/register', handleUpload, async (req, res) => {
     // --- Save corresponding User account ---
     try {
       const user = new User({
-        participantId: registrationId,
+        participantId,
         registrationId,
         name: reg.name,
         email: reg.email,
@@ -118,10 +121,12 @@ router.post('/register', handleUpload, async (req, res) => {
       console.error('[User Creation Warning]', userErr.message);
     }
 
-    // --- Sync to Google Sheets strictly Columns A through H ---
+    // --- Sync to Google Sheets (Columns A through J: Registration ID, Participant ID, Temporary Password) ---
     try {
       await writeCredentialsToGoogleSheet({
         registrationId: reg.registrationId,
+        participantId,
+        temporaryPassword,
         name: reg.name,
         rollNumber: reg.rollNumber,
         email: reg.email,
@@ -140,6 +145,8 @@ router.post('/register', handleUpload, async (req, res) => {
     res.status(201).json({
       success: true,
       registrationId: reg.registrationId,
+      participantId,
+      temporaryPassword,
       name: reg.name,
       email: reg.email,
       rollNumber: reg.rollNumber,

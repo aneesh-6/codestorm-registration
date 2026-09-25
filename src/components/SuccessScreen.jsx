@@ -14,23 +14,15 @@ export default function SuccessScreen({ data, onBack }) {
     mobile,
     transactionId
   } = data;
-  const [copiedCreds, setCopiedCreds] = useState(false);
+  const regMatch = registrationId?.match(/^CODESTORM-2026-(\d+)$/i);
+  const participantId = data.participantId || (regMatch ? `CS26-${regMatch[1]}` : (registrationId ? `CS26-${registrationId.slice(-4)}` : ''));
+  const password = data.temporaryPassword || data.password || (regMatch ? `PASS${regMatch[1]}` : (registrationId ? `PASS${registrationId.slice(-4)}` : ''));
 
   const timestamp = new Date().toLocaleString('en-IN', {
     day: '2-digit', month: 'long', year: 'numeric',
     hour: '2-digit', minute: '2-digit', hour12: true,
   });
   const printRef = useRef();
-
-  const handleCopyCredentials = () => {
-    const textToCopy = `CodeStorm 2026 Login Credentials\n\nLogin ID: ${registrationId}\nPassword: ${registrationId}\n\nUse your Registration ID as both your Login ID and Password.`;
-
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(textToCopy);
-      setCopiedCreds(true);
-      setTimeout(() => setCopiedCreds(false), 2500);
-    }
-  };
 
   const handleDownload = () => {
     const content = `
@@ -41,6 +33,8 @@ Malla Reddy Engineering College and Management Sciences
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 REGISTRATION ID:  ${registrationId}
+PARTICIPANT ID:   ${participantId}
+PASSWORD:         ${password}
 Name:             ${name}
 Roll Number:      ${rollNumber || 'N/A'}
 Year:             ${year || 'N/A'}
@@ -52,7 +46,7 @@ Transaction ID:   ${transactionId || 'N/A'}
 Registered On:    ${timestamp}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Keep this Registration ID for future reference and Event Login.
+Use your Participant ID and Password to log in to the CodeStorm Event Platform.
 THINK • DEBUG • PREDICT • CODE
     `.trim();
     const blob = new Blob([content], { type: 'text/plain' });
@@ -84,154 +78,49 @@ THINK • DEBUG • PREDICT • CODE
               🎉 REGISTRATION SUCCESSFUL!
             </h2>
             <p className="success-subhead">
-              Your registration has been recorded successfully. Please save your Registration ID.
+              Your registration has been recorded successfully. Please save your Participant ID and Password.
             </p>
           </div>
 
-          {/* Registration ID */}
-          <div className="success-reg-id" aria-label={`Your registration ID is ${registrationId}`}>
-            <div className="success-reg-id-label">Registration ID:</div>
-            <div className="success-reg-id-value">{registrationId}</div>
+          {/* Credentials Display */}
+          <div className="credentials-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px', margin: '20px 0' }}>
+            <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '12px', padding: '16px', textAlign: 'center' }}>
+              <div style={{ fontSize: '11px', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', marginBottom: '6px', letterSpacing: '0.5px' }}>Registration ID</div>
+              <div style={{ fontSize: '16px', fontWeight: 700, fontFamily: 'monospace', color: '#f1f5f9' }}>{registrationId}</div>
+            </div>
+            <div style={{ background: 'rgba(56, 189, 248, 0.08)', border: '1px solid rgba(56, 189, 248, 0.25)', borderRadius: '12px', padding: '16px', textAlign: 'center' }}>
+              <div style={{ fontSize: '11px', fontWeight: 600, color: '#38bdf8', textTransform: 'uppercase', marginBottom: '6px', letterSpacing: '0.5px' }}>Participant ID (Login ID)</div>
+              <div style={{ fontSize: '18px', fontWeight: 800, fontFamily: 'monospace', color: '#38bdf8' }}>{participantId}</div>
+            </div>
+            <div style={{ background: 'rgba(74, 222, 128, 0.08)', border: '1px solid rgba(74, 222, 128, 0.25)', borderRadius: '12px', padding: '16px', textAlign: 'center' }}>
+              <div style={{ fontSize: '11px', fontWeight: 600, color: '#4ade80', textTransform: 'uppercase', marginBottom: '6px', letterSpacing: '0.5px' }}>Password</div>
+              <div style={{ fontSize: '18px', fontWeight: 800, fontFamily: 'monospace', color: '#4ade80', letterSpacing: '1px' }}>{password}</div>
+            </div>
           </div>
 
-          {/* Official Event Conducting Platform Credentials Section */}
-          <section
-            className="success-credentials-box no-print"
-            aria-label="Event Login Credentials"
+          {/* Event Platform Login Notice */}
+          <div
+            className="no-print"
             style={{
               background: 'linear-gradient(135deg, #0b1329 0%, #1a2d5a 100%)',
               color: '#ffffff',
-              borderRadius: '16px',
-              padding: '24px 28px',
-              margin: '20px 0 28px',
-              textAlign: 'left',
-              border: '2px solid #f97316',
-              boxShadow: '0 10px 28px rgba(11, 19, 41, 0.3)',
-            }}
-          >
-            <div style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              background: 'rgba(249, 115, 22, 0.2)',
-              color: '#fb923c',
-              padding: '4px 12px',
-              borderRadius: '9999px',
-              fontSize: '0.75rem',
-              fontWeight: 800,
-              letterSpacing: '0.08em',
-              textTransform: 'uppercase',
-              marginBottom: '12px'
-            }}>
-              LOGIN CREDENTIALS
-            </div>
-
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-              gap: '16px',
-              background: 'rgba(255, 255, 255, 0.06)',
-              border: '1px solid rgba(255, 255, 255, 0.12)',
-              padding: '16px 20px',
               borderRadius: '12px',
-              marginBottom: '16px'
-            }}>
-              <div>
-                <div style={{ fontSize: '0.75rem', color: 'rgba(255, 255, 255, 0.65)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  Login ID
-                </div>
-                <div style={{ fontSize: '1.35rem', fontWeight: 900, fontFamily: 'monospace', color: '#38bdf8', letterSpacing: '0.04em', marginTop: '4px' }}>
-                  {registrationId}
-                </div>
-              </div>
-
-              <div>
-                <div style={{ fontSize: '0.75rem', color: 'rgba(255, 255, 255, 0.65)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  Password
-                </div>
-                <div style={{ fontSize: '1.35rem', fontWeight: 900, fontFamily: 'monospace', color: '#f97316', letterSpacing: '0.04em', marginTop: '4px' }}>
-                  {registrationId}
-                </div>
-              </div>
-            </div>
-
-            <div style={{
+              padding: '16px 20px',
+              margin: '14px 0 20px',
+              textAlign: 'center',
+              border: '1.5px solid rgba(56, 189, 248, 0.35)',
               display: 'flex',
               alignItems: 'center',
-              gap: '8px',
-              fontSize: '0.875rem',
-              color: '#fbbf24',
-              fontWeight: 600,
-              marginBottom: '20px',
-              lineHeight: 1.4
-            }}>
-              <span>ℹ️</span>
-              <span>
-                Use your Registration ID as both your Login ID and Password.
-              </span>
-            </div>
-
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center' }}>
-              <button
-                type="button"
-                onClick={handleCopyCredentials}
-                style={{
-                  background: copiedCreds ? '#10b981' : 'rgba(255, 255, 255, 0.12)',
-                  border: copiedCreds ? '1px solid #10b981' : '1px solid rgba(255, 255, 255, 0.25)',
-                  color: '#ffffff',
-                  fontWeight: 700,
-                  fontSize: '0.875rem',
-                  padding: '10px 20px',
-                  borderRadius: '9999px',
-                  cursor: 'pointer',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  transition: 'all 0.2s ease',
-                }}
-              >
-                {copiedCreds ? (
-                  <>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                      <polyline points="20 6 9 17 4 12"/>
-                    </svg>
-                    <span>✓ Credentials copied</span>
-                  </>
-                ) : (
-                  <>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-                      <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
-                    </svg>
-                    <span>[ COPY CREDENTIALS ]</span>
-                  </>
-                )}
-              </button>
-
-              <a
-                href={EVENT_PLATFORM_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)',
-                  color: '#ffffff',
-                  fontWeight: 800,
-                  fontSize: '0.875rem',
-                  padding: '10px 22px',
-                  borderRadius: '9999px',
-                  textDecoration: 'none',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  boxShadow: '0 4px 14px rgba(249, 115, 22, 0.35)',
-                  transition: 'all 0.2s ease',
-                }}
-              >
-                <span>[ GO TO EVENT LOGIN ]</span>
-                <span aria-hidden="true">→</span>
-              </a>
-            </div>
-          </section>
+              gap: '10px',
+              flexWrap: 'wrap',
+              justifyContent: 'center',
+            }}
+          >
+            <span style={{ fontSize: '1.1rem' }}>🔑</span>
+            <span style={{ fontSize: '0.9rem', fontWeight: 600, color: '#e2e8f0', lineHeight: 1.5 }}>
+              Log in to the CodeStorm Event Platform using your <strong style={{ fontFamily: 'monospace', color: '#38bdf8' }}>Participant ID</strong> and <strong style={{ fontFamily: 'monospace', color: '#4ade80' }}>Password</strong>.
+            </span>
+          </div>
 
           {/* Details */}
           <div className="success-details">
