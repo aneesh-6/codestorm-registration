@@ -751,12 +751,45 @@ function syncAllToEventPlatform() {
 }
 
 /**
+ * Migrates all rows in this sheet so Column I = CS26-XXXX and Column J = PASSXXXX
+ */
+function migrateCredentialsInSheet() {
+  const ss = getSpreadsheet();
+  const sheet = getRegistrationSheet(ss);
+  const lastRow = sheet.getLastRow();
+  if (lastRow <= 1) {
+    try { SpreadsheetApp.getUi().alert("No registrations found to migrate."); } catch (e) { Logger.log("No registrations found."); }
+    return;
+  }
+  const { colMap } = ensureAndMapHeaders(sheet);
+  let count = 0;
+  for (let r = 2; r <= lastRow; r++) {
+    const regId = colMap.registrationId ? String(sheet.getRange(r, colMap.registrationId).getValue() || "").trim() : "";
+    if (!regId) continue;
+    const match = regId.match(/^CODESTORM-2026-(\d+)$/i);
+    const num = match ? match[1] : regId.replace(/\D/g, '').slice(-4).padStart(4, '0');
+    if (colMap.participantId) {
+      sheet.getRange(r, colMap.participantId).setValue("CS26-" + num).setHorizontalAlignment("center");
+    }
+    if (colMap.temporaryPassword) {
+      sheet.getRange(r, colMap.temporaryPassword).setValue("PASS" + num).setHorizontalAlignment("center");
+    }
+    count++;
+  }
+  Logger.log("✅ Migration complete! Updated " + count + " records with Participant ID (CS26-XXXX) and Password (PASSXXXX).");
+  try {
+    SpreadsheetApp.getUi().alert("✅ Migration complete! Updated " + count + " records with Participant ID (CS26-XXXX) and Password (PASSXXXX).");
+  } catch (e) {}
+}
+
+/**
  * Creates custom menu in Google Sheets
  */
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu("CodeStorm")
     .addItem("Sync to Event Platform", "syncAllToEventPlatform")
+    .addItem("Migrate Credentials to PASSXXXX", "migrateCredentialsInSheet")
     .addItem("Setup & Format Sheet", "setupSheet")
     .addToUi();
 }
